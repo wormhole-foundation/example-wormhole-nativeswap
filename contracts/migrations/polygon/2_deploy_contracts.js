@@ -3,7 +3,7 @@ const fsp = require("fs/promises");
 const CrossChainSwapV2 = artifacts.require("CrossChainSwapV2");
 const SwapHelper = artifacts.require("SwapHelper");
 
-const scriptsAddressPath = "../ui/src/addresses";
+const scriptsAddressPath = "../react/src/addresses";
 
 module.exports = async function (deployer, network) {
   const routerAddress = "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"; // quickwap
