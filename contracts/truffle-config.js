@@ -25,9 +25,9 @@
 // const mnemonic = fs.readFileSync('.secret').toString().trim();
 
 module.exports = {
-  contracts_directory: "./contracts",
-  contracts_build_directory: "./build/contracts",
-  migrations_directory: "./migrations/development",
+  contracts_directory: './contracts',
+  contracts_build_directory: './build/contracts',
+  migrations_directory: './migrations/development',
 
   /**
    * Networks define how you connect to your ethereum client and let you set the
@@ -39,13 +39,13 @@ module.exports = {
    * $ truffle test --network <network-name>
    */
 
-  networks: {
-    development: {
-      host: "127.0.0.1", // Localhost (default: none)
-      port: 8545, // Standard Ethereum port (default: none)
-      network_id: "*", // Any network (default: none)
-    },
-  },
+   networks: {
+     development: {
+       host: '127.0.0.1',     // Localhost (default: none)
+       port: 8545,            // Standard Ethereum port (default: none)
+       network_id: '*',       // Any network (default: none)
+     }
+   },
 
   // Set default mocha options here, use special reporters etc.
   mocha: {
@@ -55,16 +55,16 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-      version: "0.7.6", // Fetch exact version from solc-bin (default: truffle's version)
+      version: '0.7.6',    // Fetch exact version from solc-bin (default: truffle's version)
       // docker: true,        // Use '0.5.1' you've installed locally with docker (default: false)
       // settings: {          // See the solidity docs for advice about optimization and evmVersion
-      //  optimizer: {
-      //    enabled: false,
-      //    runs: 200
-      //  },
+      optimizer: {
+          enabled: false,
+          runs: 200
+      },
       //  evmVersion: 'byzantium'
       // }
-    },
+    }
   },
 
   // Truffle DB is enabled in this project by default. Enabling Truffle DB surfaces access to the @truffle/db package
