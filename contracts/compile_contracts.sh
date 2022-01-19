@@ -5,6 +5,8 @@ set -euo pipefail
 npx truffle compile --config truffle-config.ethereum.js
 npx truffle compile --config truffle-config.polygon.js
 
-mkdir -p ../ui/src/abi/contracts
+CONTRACTS="../react/src/abi/contracts"
 
-cp -r build/contracts/* ../ui/src/abi/contracts
+mkdir -p $CONTRACTS
+
+cp -r build/contracts/* $CONTRACTS
