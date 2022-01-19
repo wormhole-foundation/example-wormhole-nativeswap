@@ -28,32 +28,6 @@ We also wrote a front-end UI using a custom class (UniswapToUniswapExecutor) to 
 
 That is up to you! You are not limited to native-to-native multi-chain swaps. Build in your own smart routing with whichever DEX to perform any swap from chain A to chain B. Wormhole messaging and token transfers with payload are generic enough to adapt this example for any of the chains Wormhole currently supports.
 
-### Deployment
-
-Before deploying, you need to install contract and Truffle dependencies:
-
-```bash
-npm ci
-```
-
-There are two deployment scripts found in the _scripts_ directory:
-
-- _deploy_to_goerli.sh_
-- _deploy_to_mumbai.sh_
-
-These will deploy _CrossChainSwapV3_ and _CrossChainSwapV2_ respectively (found in the _contracts_ directory) and automatically write those contract addresses to a Typescript file, which will be compiled with everything else for your front-end library. You can run them like so:
-
-```bash
-bash scripts/deploy_to_goerli.sh
-bash scripts/deploy_to_mumbai.sh
-```
-
-After you deploy your contracts, run the following to build the front-end library:
-
-```bash
-npm run build
-```
-
 ### Running
 
 First compile the example contracts:
