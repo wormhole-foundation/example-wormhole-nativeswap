@@ -36,7 +36,8 @@ library SwapHelper {
         address[2] path;
         uint256 deadline;
         uint24 poolFee;
-        uint8 swapType;
+        uint8 swapFunctionType;
+        uint8 swapCurrencyType;
     }
 
     function decodeVaaPayload(
@@ -83,6 +84,9 @@ library SwapHelper {
         decoded.poolFee = encodedVm.payload.toUint16(index);
         index += 2;
 
-        decoded.swapType = encodedVm.payload.toUint8(index);
+        decoded.swapFunctionType = encodedVm.payload.toUint8(index);
+        index += 1;
+
+        decoded.swapCurrencyType = encodedVm.payload.toUint8(index);
     }
 }
