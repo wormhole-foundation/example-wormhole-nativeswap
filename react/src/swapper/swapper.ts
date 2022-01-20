@@ -39,6 +39,10 @@ import {
   swapExactInFromVaaNativeV3,
   swapExactInFromVaaTokenV2,
   swapExactInFromVaaTokenV3,
+  swapExactOutFromVaaNativeV2,
+  swapExactOutFromVaaNativeV3,
+  swapExactOutFromVaaTokenV2,
+  swapExactOutFromVaaTokenV3,
 } from "util";
 import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
 import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
@@ -357,11 +361,13 @@ async function approveAndSwapExactOut(
       }
       */
 
+  const address = await srcWallet.getAddress();
+
   const swapParams = [
     amountOut,
     maxAmountIn,
     quoteParams.dst.amountOut,
-    srcWallet.address,
+    address,
     quoteParams.src.deadline,
     quoteParams.dst.poolFee || quoteParams.src.poolFee,
   ];
@@ -503,7 +509,7 @@ async function swapExactInFromVaa(
 
 async function swapExactOutFromVaa(
   dstProvider: ethers.providers.Provider,
-  dstWallet: ethers.Wallet,
+  dstWallet: ethers.Signer,
   dstExecutionParams: ExecutionParameters,
   dstProtocol: string,
   signedVaa: Uint8Array,
@@ -731,7 +737,7 @@ export class UniswapToUniswapExecutor {
   }
 
   async approveAndSwapExactOut(
-    wallet: ethers.Wallet
+    wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
     return approveAndSwapExactOut(
       this.getSrcProvider(),
@@ -827,7 +833,8 @@ export class UniswapToUniswapExecutor {
       wallet,
       this.dstExecutionParams,
       this.cachedExactInParams.dst.protocol,
-      this.vaaBytes
+      this.vaaBytes,
+      this.isNative
     );
   }
 
