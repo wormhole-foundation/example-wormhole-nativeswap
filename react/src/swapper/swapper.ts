@@ -32,6 +32,14 @@ import {
   WETH_TOKEN_INFO,
   WMATIC_TOKEN_INFO,
 } from "../utils/consts";
+import {
+  CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2,
+  CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3,
+  swapExactInFromVaaNativeV2,
+  swapExactInFromVaaNativeV3,
+  swapExactInFromVaaTokenV2,
+  swapExactInFromVaaTokenV3,
+} from "util";
 import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
 import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
@@ -72,18 +80,6 @@ const EXECUTION_PARAMETERS_POLYGON: ExecutionParameters = {
     coreBridgeAddress: CORE_BRIDGE_ADDRESS_POLYGON,
     tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_POLYGON,
   },
-};
-
-const CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3 = {
-  gasLimit: "550000",
-  maxFeePerGas: "250000000000",
-  maxPriorityFeePerGas: "1690000000",
-};
-
-const CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2 = {
-  gasLimit: "350000",
-  maxFeePerGas: "250000000000",
-  maxPriorityFeePerGas: "1690000000",
 };
 
 function makeExecutionParameters(id: number): ExecutionParameters {
@@ -175,7 +171,8 @@ async function approveAndSwapExactIn(
   srcTokenIn: UniEvmToken,
   quoteParams: ExactInCrossParameters,
   srcExecutionParams: ExecutionParameters,
-  dstExecutionParams: ExecutionParameters
+  dstExecutionParams: ExecutionParameters,
+  isNative: boolean
 ): Promise<TransactionReceipt> {
   const swapContractParams = srcExecutionParams.crossChainSwap;
 
@@ -190,6 +187,7 @@ async function approveAndSwapExactIn(
   // approve and swap this amount
   const amountIn = quoteParams.src.amountIn;
 
+  /*
   // approve swap contract to spend our tokens
   console.info("approving contract to spend token in");
   await approveContractTokenSpend(
@@ -199,6 +197,7 @@ async function approveAndSwapExactIn(
     swapContract.address,
     amountIn
   );
+  */
 
   const address = await srcWallet.getAddress();
 
@@ -223,29 +222,246 @@ async function approveAndSwapExactIn(
 
   // do the swap
   if (protocol === PROTOCOL_UNISWAP_V2) {
-    console.info("swapExactInToV3");
-    const tx = await contractWithSigner.swapExactInToV3(
-      swapParams,
-      pathArray,
-      quoteParams.relayerFee.amount,
-      dstWormholeChainId,
-      dstContractAddress,
-      bridgeNonce,
-      CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2
+    // approve swap contract to spend our tokens
+    console.info("approving contract to spend token in");
+    await approveContractTokenSpend(
+      srcProvider,
+      srcWallet,
+      srcTokenIn.getContract(),
+      swapContract.address,
+      amountIn
     );
-    return tx.wait();
+
+    if (isNative) {
+      const gasPlusValue = {
+        value: amountIn,
+        gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.gasLimit,
+        maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxFeePerGas,
+        maxPriorityFeePerGas:
+          CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxPriorityFeePerGas,
+      };
+
+      console.info("swapExactNativeInToV3");
+      const tx = await contractWithSigner.swapExactNativeInToV3(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        gasPlusValue
+      );
+      return tx.wait();
+    } else {
+      console.info("swapExactInToV3");
+      const tx = await contractWithSigner.swapExactInToV3(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2
+      );
+      return tx.wait();
+    }
   } else {
-    console.info("swapExactInToV2");
-    const tx = await contractWithSigner.swapExactInToV2(
-      swapParams,
-      pathArray,
-      quoteParams.relayerFee.amount,
-      dstWormholeChainId,
-      dstContractAddress,
-      bridgeNonce,
-      CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3
+    if (isNative) {
+      const gasPlusValue = {
+        value: amountIn,
+        gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.gasLimit,
+        maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxFeePerGas,
+        maxPriorityFeePerGas:
+          CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxPriorityFeePerGas,
+      };
+
+      console.info("swapExactNativeInToV2");
+      const tx = await contractWithSigner.swapExactNativeInToV2(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        gasPlusValue
+      );
+      return tx.wait();
+    } else {
+      // approve swap contract to spend our tokens
+      console.info("approving contract to spend token in");
+      await approveContractTokenSpend(
+        srcProvider,
+        srcWallet,
+        srcTokenIn.getContract(),
+        swapContract.address,
+        amountIn
+      );
+      console.info("swapExactInToV2");
+      const tx = await contractWithSigner.swapExactInToV2(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3
+      );
+      return tx.wait();
+    }
+  }
+}
+
+async function approveAndSwapExactOut(
+  srcProvider: ethers.providers.Provider,
+  srcWallet: ethers.Signer,
+  srcTokenIn: UniEvmToken,
+  quoteParams: ExactOutCrossParameters,
+  srcExecutionParams: ExecutionParameters,
+  dstExecutionParams: ExecutionParameters,
+  isNative: boolean
+): Promise<TransactionReceipt> {
+  const swapContractParams = srcExecutionParams.crossChainSwap;
+
+  const protocol = quoteParams.src.protocol;
+  const swapContract = makeCrossChainSwapContract(
+    srcProvider,
+    protocol,
+    swapContractParams.address
+  );
+  const contractWithSigner = swapContract.connect(srcWallet);
+
+  // approve and swap this amount
+  const amountOut = quoteParams.src.amountOut;
+  const maxAmountIn = quoteParams.src.maxAmountIn;
+
+  /*
+      // approve swap contract to spend our tokens
+      console.info('approving contract to spend token in'); 
+      await approveContractTokenSpend(
+          srcProvider,
+          srcWallet, 
+          srcTokenIn.getContract(),
+          swapContract.address, 
+          maxAmountIn,
+      ); 
+      */
+
+  /*
+      struct ExactOutParameters {
+          uint256 amountOut;
+          uint256 amountInMaximum;
+          uint256 targetAmountOut;
+          address targetChainRecipient;
+          uint256 deadline;
+          uint24 poolFee;
+      }
+      */
+
+  const swapParams = [
+    amountOut,
+    maxAmountIn,
+    quoteParams.dst.amountOut,
+    srcWallet.address,
+    quoteParams.src.deadline,
+    quoteParams.dst.poolFee || quoteParams.src.poolFee,
+  ];
+  const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
+
+  const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
+  const dstContractAddress = addressToBytes32(
+    dstExecutionParams.crossChainSwap.address,
+    dstWormholeChainId
+  );
+  const bridgeNonce = 69;
+
+  //const fakeRelayerFee = quoteParams.relayerFee.amount;
+  // do the swap
+  if (protocol === PROTOCOL_UNISWAP_V2) {
+    console.info("approving contract to spend token in");
+    await approveContractTokenSpend(
+      srcProvider,
+      srcWallet,
+      srcTokenIn.getContract(),
+      swapContract.address,
+      maxAmountIn
     );
-    return tx.wait();
+
+    if (isNative) {
+      const gasPlusValue = {
+        value: maxAmountIn,
+        gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.gasLimit,
+        maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxFeePerGas,
+        maxPriorityFeePerGas:
+          CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxPriorityFeePerGas,
+      };
+
+      console.info("swapExactNativeOutToV3");
+      const tx = await contractWithSigner.swapExactNativeOutToV3(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        gasPlusValue
+      );
+      return tx.wait();
+    } else {
+      console.info("swapExactOutToV3");
+      const tx = await contractWithSigner.swapExactOutToV3(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2
+      );
+      return tx.wait();
+    }
+  } else {
+    if (isNative) {
+      const gasPlusValue = {
+        value: maxAmountIn,
+        gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.gasLimit,
+        maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxFeePerGas,
+        maxPriorityFeePerGas:
+          CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxPriorityFeePerGas,
+      };
+
+      console.info("swapExactNativeOutToV2");
+      const tx = await contractWithSigner.swapExactNativeOutToV2(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        gasPlusValue
+      );
+      return tx.wait();
+    } else {
+      console.info("approving contract to spend token in");
+      await approveContractTokenSpend(
+        srcProvider,
+        srcWallet,
+        srcTokenIn.getContract(),
+        swapContract.address,
+        maxAmountIn
+      );
+
+      console.info("swapExactOutToV2");
+      const tx = await contractWithSigner.swapExactOutToV2(
+        swapParams,
+        pathArray,
+        quoteParams.relayerFee.amount,
+        dstWormholeChainId,
+        dstContractAddress,
+        bridgeNonce,
+        CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3
+      );
+      return tx.wait();
+    }
   }
 }
 
@@ -254,7 +470,8 @@ async function swapExactInFromVaa(
   dstWallet: ethers.Signer,
   dstExecutionParams: ExecutionParameters,
   dstProtocol: string,
-  signedVAA: Uint8Array
+  signedVaa: Uint8Array,
+  isNative: boolean
 ): Promise<TransactionReceipt> {
   const swapContractParams = dstExecutionParams.crossChainSwap;
 
@@ -266,19 +483,57 @@ async function swapExactInFromVaa(
   const contractWithSigner = swapContract.connect(dstWallet);
 
   if (dstProtocol === PROTOCOL_UNISWAP_V3) {
-    console.info("swapExactInFromV2");
-    const tx = await contractWithSigner.swapExactInFromV2(
-      signedVAA,
-      CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3
-    );
-    return tx.wait();
+    if (isNative) {
+      console.info("swapExactNativeInFromV2");
+      return swapExactInFromVaaNativeV3(contractWithSigner, signedVaa);
+    } else {
+      console.info("swapExactInFromV2");
+      return swapExactInFromVaaTokenV3(contractWithSigner, signedVaa);
+    }
   } else {
-    console.info("swapExactInFromV3");
-    const tx = await contractWithSigner.swapExactInFromV3(
-      signedVAA,
-      CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2
-    );
-    return tx.wait();
+    if (isNative) {
+      console.info("swapExactNativeInFromV3");
+      return swapExactInFromVaaNativeV2(contractWithSigner, signedVaa);
+    } else {
+      console.info("swapExactInFromV3");
+      return swapExactInFromVaaTokenV2(contractWithSigner, signedVaa);
+    }
+  }
+}
+
+async function swapExactOutFromVaa(
+  dstProvider: ethers.providers.Provider,
+  dstWallet: ethers.Wallet,
+  dstExecutionParams: ExecutionParameters,
+  dstProtocol: string,
+  signedVaa: Uint8Array,
+  isNative: boolean
+): Promise<TransactionReceipt> {
+  const swapContractParams = dstExecutionParams.crossChainSwap;
+
+  const swapContract = makeCrossChainSwapContract(
+    dstProvider,
+    dstProtocol,
+    swapContractParams.address
+  );
+  const contractWithSigner = swapContract.connect(dstWallet);
+
+  if (dstProtocol === PROTOCOL_UNISWAP_V3) {
+    if (isNative) {
+      console.info("swapExactNativeInFromV2");
+      return swapExactOutFromVaaNativeV3(contractWithSigner, signedVaa);
+    } else {
+      console.info("swapExactInFromV2");
+      return swapExactOutFromVaaTokenV3(contractWithSigner, signedVaa);
+    }
+  } else {
+    if (isNative) {
+      console.info("swapExactNativeInFromV3");
+      return swapExactOutFromVaaNativeV2(contractWithSigner, signedVaa);
+    } else {
+      console.info("swapExactInFromV3");
+      return swapExactOutFromVaaTokenV2(contractWithSigner, signedVaa);
+    }
   }
 }
 
@@ -466,14 +721,23 @@ export class UniswapToUniswapExecutor {
       this.tokens.srcIn,
       this.cachedExactInParams,
       this.srcExecutionParams,
-      this.dstExecutionParams
+      this.dstExecutionParams,
+      this.isNative
     );
   }
 
   async approveAndSwapExactOut(
     wallet: ethers.Wallet
   ): Promise<TransactionReceipt> {
-    throw Error("ExactOut not supported yet");
+    return approveAndSwapExactOut(
+      this.getSrcProvider(),
+      wallet,
+      this.tokens.srcIn,
+      this.cachedExactOutParams,
+      this.srcExecutionParams,
+      this.dstExecutionParams,
+      this.isNative
+    );
   }
 
   async approveAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
@@ -564,11 +828,17 @@ export class UniswapToUniswapExecutor {
   }
 
   async swapExactOutFromVaa(
-    wallet: ethers.Wallet
+    wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
-    throw Error("ExactOut not supported yet");
+    return swapExactOutFromVaa(
+      this.getDstProvider(),
+      wallet,
+      this.dstExecutionParams,
+      this.cachedExactOutParams.dst.protocol,
+      this.vaaBytes,
+      this.isNative
+    );
   }
-
   clearState(): void {
     // TODO: after the whole swap, clear the state of everything
     this.vaaBytes = undefined;
