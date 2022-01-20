@@ -580,6 +580,7 @@ export class UniswapToUniswapExecutor {
   tokens: CrossChainSwapTokens;
 
   // swapping
+  isNative: boolean;
   slippage: string;
   relayerFeeAmount: string;
   srcExecutionParams: ExecutionParameters;
@@ -594,9 +595,12 @@ export class UniswapToUniswapExecutor {
 
   async initialize(
     tokenInAddress: string,
-    tokenOutAddress: string
+    tokenOutAddress: string,
+    isNative: boolean
   ): Promise<void> {
     this.clearState();
+
+    this.isNative = isNative;
 
     const srcProvider = makeProvider(tokenInAddress);
     const dstProvider = makeProvider(tokenOutAddress);
