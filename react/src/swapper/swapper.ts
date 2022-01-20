@@ -245,8 +245,8 @@ async function approveAndSwapExactIn(
           CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxPriorityFeePerGas,
       };
 
-      console.info("swapExactNativeInToV3");
-      const tx = await contractWithSigner.swapExactNativeInToV3(
+      console.info("swapExactNativeInAndTransfer");
+      const tx = await contractWithSigner.swapExactNativeInAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -257,8 +257,8 @@ async function approveAndSwapExactIn(
       );
       return tx.wait();
     } else {
-      console.info("swapExactInToV3");
-      const tx = await contractWithSigner.swapExactInToV3(
+      console.info("swapExactInAndTransfer");
+      const tx = await contractWithSigner.swapExactInAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -279,8 +279,8 @@ async function approveAndSwapExactIn(
           CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxPriorityFeePerGas,
       };
 
-      console.info("swapExactNativeInToV2");
-      const tx = await contractWithSigner.swapExactNativeInToV2(
+      console.info("swapExactNativeInAndTransfer");
+      const tx = await contractWithSigner.swapExactNativeInAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -300,8 +300,8 @@ async function approveAndSwapExactIn(
         swapContract.address,
         amountIn
       );
-      console.info("swapExactInToV2");
-      const tx = await contractWithSigner.swapExactInToV2(
+      console.info("swapExactInAndTransfer");
+      const tx = await contractWithSigner.swapExactInAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -401,8 +401,8 @@ async function approveAndSwapExactOut(
           CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V2.maxPriorityFeePerGas,
       };
 
-      console.info("swapExactNativeOutToV3");
-      const tx = await contractWithSigner.swapExactNativeOutToV3(
+      console.info("swapExactNativeOutAndTransfer");
+      const tx = await contractWithSigner.swapExactNativeOutAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -413,8 +413,8 @@ async function approveAndSwapExactOut(
       );
       return tx.wait();
     } else {
-      console.info("swapExactOutToV3");
-      const tx = await contractWithSigner.swapExactOutToV3(
+      console.info("swapExactOutAndTransfer");
+      const tx = await contractWithSigner.swapExactOutAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -435,8 +435,8 @@ async function approveAndSwapExactOut(
           CROSSCHAINSWAP_GAS_PARAMETERS_UNISWAP_V3.maxPriorityFeePerGas,
       };
 
-      console.info("swapExactNativeOutToV2");
-      const tx = await contractWithSigner.swapExactNativeOutToV2(
+      console.info("swapExactNativeOutAndTransfer");
+      const tx = await contractWithSigner.swapExactNativeOutAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
@@ -456,8 +456,8 @@ async function approveAndSwapExactOut(
         maxAmountIn
       );
 
-      console.info("swapExactOutToV2");
-      const tx = await contractWithSigner.swapExactOutToV2(
+      console.info("swapExactOutAndTransfer");
+      const tx = await contractWithSigner.swapExactOutAndTransfer(
         swapParams,
         pathArray,
         quoteParams.relayerFee.amount,
