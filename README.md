@@ -67,3 +67,33 @@ And finally, start the react app:
 npm ci
 npm run start
 ```
+
+### Running the swap relayer
+
+You need to have a spy_guardian running in TestNet. If there is not already one running, you can build the docker image and start it as follows:
+
+#### Build the spy_guardian docker container if you don't already have it.
+
+```
+$ cd swap_relayer
+$ docker build -f Dockerfile.spy_guardian -t spy_guardian .
+```
+
+#### Start the spy_guardian docker container in TestNet.
+
+```
+$ docker run --platform linux/amd64 --network=host spy_guardian \
+--bootstrap /dns4/wormhole-testnet-v2-bootstrap.certus.one/udp/8999/quic/p2p/12D3KooWBY9ty9CXLBXGQzMuqkziLntsVcyz4pk1zWaJRvJn6Mmt \
+--network /wormhole/testnet/2/1 \
+--spyRPC "[::]:7073"
+```
+
+#### Start the swap relayer
+
+```
+$ cd swap_relayer
+$ # Edit the .env.sample, be sure to set a valid wallet private key.
+$ npm ci
+$ npm run build
+$ npm run start
+```
