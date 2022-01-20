@@ -9,6 +9,7 @@ module.exports = async function (deployer, network) {
   const routerAddress = "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"; // quickwap
   const feeTokenAddress = "0xe3a1c77e952b57b5883f6c906fc706fcc7d4392c"; // wUST
   const tokenBridgeAddress = "0x377D55a7928c046E18eEbb61977e714d2a76472a";
+  const wrappedMaticAddress = "0x9c3c9283d3e44854697cd22d3faa240cfb032889";
 
   await deployer.deploy(SwapHelper);
   await deployer.link(SwapHelper, CrossChainSwapV2);
@@ -16,7 +17,8 @@ module.exports = async function (deployer, network) {
     CrossChainSwapV2,
     routerAddress,
     feeTokenAddress,
-    tokenBridgeAddress
+    tokenBridgeAddress,
+    wrappedMaticAddress
   );
 
   // save the contract address somewhere
