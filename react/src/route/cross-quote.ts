@@ -313,10 +313,5 @@ export class UniswapToUniswapQuoter {
   setDeadlines(deadline: string): void {
     this.srcRouter.setDeadline(deadline);
     this.dstRouter.setDeadline(deadline);
-    return;
-  }
-
-  estimateUstFee(gasPriceInNativeCurrency: string): string {
-    return "0";
   }
 }

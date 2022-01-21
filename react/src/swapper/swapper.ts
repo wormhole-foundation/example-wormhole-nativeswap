@@ -672,4 +672,26 @@ export class UniswapToUniswapExecutor {
       this.isNative
     );
   }
+
+  //getSwapResult(
+  //  walletAddress: string,
+  //  onSwapResult: (result: boolean) => void
+  //) {
+  //  console.log(this.cachedExactInParams.dst.protocol);
+  //  console.log(this.dstExecutionParams.crossChainSwap.address);
+  //  const contract = makeCrossChainSwapContract(
+  //    this.getDstProvider(),
+  //    this.quoteType === QuoteType.ExactIn
+  //      ? this.cachedExactInParams.dst.protocol
+  //      : this.cachedExactOutParams.dst.protocol,
+  //    this.dstExecutionParams.crossChainSwap.address
+  //  );
+  //  const filter = contract.filters.SwapResult(walletAddress);
+  //  contract.once(
+  //    filter,
+  //    (recipient, tokenAddress, caller, amount, success) => {
+  //      onSwapResult(success);
+  //    }
+  //  );
+  //}
 }
