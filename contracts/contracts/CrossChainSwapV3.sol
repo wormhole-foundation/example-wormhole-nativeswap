@@ -48,25 +48,26 @@ contract CrossChainSwapV3 {
     IUniswapRouter public immutable swapRouter;
     address public immutable feeTokenAddress;
     address public immutable tokenBridgeAddress;
-    address public immutable wrappedEth;
+    address public immutable wrappedNative;
 
     constructor(
         address _swapRouterAddress, 
         address _feeTokenAddress, 
         address _tokenBridgeAddress,
-        address _wrappedEth
+        address _wrappedNative
     ) {
         swapRouter = IUniswapRouter(_swapRouterAddress);
         feeTokenAddress = _feeTokenAddress;
         tokenBridgeAddress = _tokenBridgeAddress;
-        wrappedEth = _wrappedEth;
+        wrappedNative = _wrappedNative;
     }
 
     event SwapResult(
-        address indexed _recipient, 
-        address indexed _tokenOut, 
-        address indexed _from, 
-        uint256 _amountOut
+        address indexed _recipient,
+        address _tokenOut,
+        address _from,
+        uint256 _amountOut,
+        uint8 _success
     );
 
     function _getParsedPayload(
@@ -75,7 +76,11 @@ contract CrossChainSwapV3 {
         uint8 swapCurrencyType
     ) private returns (SwapHelper.DecodedVaaParameters memory payload) {
         // complete the transfer on the token bridge
-        IWormhole.VM memory vm = TokenBridge(tokenBridgeAddress).completeTransferWithPayload(encodedVaa);
+        IWormhole.VM memory vm = TokenBridge(
+            tokenBridgeAddress
+        ).completeTransferWithPayload(encodedVaa);
+
+        // make sure payload is the right size
         require(
             vm.payload.length==expectedVaaLength, 
             "VAA has the wrong number of bytes"
@@ -95,7 +100,6 @@ contract CrossChainSwapV3 {
         ); 
     }
 
-    //function swapExactNativeInFromV2(
     function recvAndSwapExactNativeIn(
         bytes calldata encodedVaa
     ) external returns (uint256 amountOut) {
@@ -109,7 +113,10 @@ contract CrossChainSwapV3 {
 
         // check path elements
         require(payload.path[0]==feeTokenAddress, "tokenIn must be UST");
-        require(payload.path[1]==wrappedEth, "tokenOut must be wETH");
+        require(
+            payload.path[1]==wrappedNative, 
+            "tokenOut must be wrapped Native"
+        );
 
         // pay relayer before attempting to do the swap
         // reflect payment in second swap amount
@@ -117,8 +124,12 @@ contract CrossChainSwapV3 {
         feeToken.safeTransfer(msg.sender, payload.relayerFee);  
         uint256 swapAmountLessFees = payload.swapAmount - payload.relayerFee;
 
-        // approve the router to spend tokens based on amountIn
-        TransferHelper.safeApprove(payload.path[0], address(swapRouter), swapAmountLessFees);
+        // approve the router to spend tokens 
+        TransferHelper.safeApprove(
+            payload.path[0], 
+            address(swapRouter), 
+            swapAmountLessFees
+        );
         
         // set swap options with user params
         ISwapRouter.ExactInputSingleParams memory params =
@@ -126,27 +137,48 @@ contract CrossChainSwapV3 {
                 tokenIn: payload.path[0],
                 tokenOut: payload.path[1],
                 fee: payload.poolFee,
-                recipient: address(this), // send wETH to this contract, then unwrap and send to recipient
+                recipient: address(this), 
                 deadline: payload.deadline,
                 amountIn: swapAmountLessFees,
                 amountOutMinimum: payload.estimatedAmount,
                 sqrtPriceLimitX96: 0
             });
 
-        // the call to `exactInputSingle` executes the swap
+        // try to execute the swap 
         try swapRouter.exactInputSingle(params) returns (uint256 amountOut) {
-            IWETH(wrappedEth).withdraw(amountOut);
+            // unwrap native and send to recipient 
+            IWETH(wrappedNative).withdraw(amountOut);
             payable(payload.recipientAddress).transfer(amountOut);
-            emit SwapResult(payload.recipientAddress, payload.path[1], msg.sender, amountOut);
+
+            // used in UI to tell user they're getting
+            // their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[1], 
+                msg.sender, 
+                amountOut,
+                1
+            );
             return amountOut;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(payload.recipientAddress, swapAmountLessFees);
-            emit SwapResult(payload.recipientAddress, payload.path[0], msg.sender, swapAmountLessFees);
+            feeToken.safeTransfer(
+                payload.recipientAddress, 
+                swapAmountLessFees
+            );
+
+            // used in UI to tell user they're getting
+            // UST instead of their desired native asset
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[0], 
+                msg.sender, 
+                swapAmountLessFees,
+                0
+            );
         }
     }
 
-    //function swapExactInFromV2(
     function recvAndSwapExactIn(
         bytes calldata encodedVaa
     ) external returns (uint256 amountOut) {
@@ -168,7 +200,11 @@ contract CrossChainSwapV3 {
         uint256 swapAmountLessFees = payload.swapAmount - payload.relayerFee;
 
         // approve the router to spend tokens based on amountIn
-        TransferHelper.safeApprove(payload.path[0], address(swapRouter), swapAmountLessFees);
+        TransferHelper.safeApprove(
+            payload.path[0], 
+            address(swapRouter), 
+            swapAmountLessFees
+        );
         
         // set swap options with user params
         ISwapRouter.ExactInputSingleParams memory params =
@@ -185,12 +221,32 @@ contract CrossChainSwapV3 {
 
         // the call to `exactInputSingle` executes the swap
         try swapRouter.exactInputSingle(params) returns (uint256 amountOut) {
-            emit SwapResult(payload.recipientAddress, payload.path[1], msg.sender, amountOut);
+            // used in UI to tell user they're getting
+            // their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[1], 
+                msg.sender, 
+                amountOut,
+                1
+            );
             return amountOut;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(payload.recipientAddress, swapAmountLessFees);
-            emit SwapResult(payload.recipientAddress, payload.path[0], msg.sender, swapAmountLessFees);
+            feeToken.safeTransfer(
+                payload.recipientAddress, 
+                swapAmountLessFees
+            );
+
+            // used in UI to tell user they're getting
+            // UST instead of their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[0], 
+                msg.sender, 
+                swapAmountLessFees,
+                0
+            );
         }
     }
 
@@ -209,7 +265,11 @@ contract CrossChainSwapV3 {
             token.safeTransferFrom(contractCaller, address(this), amountIn);
 
             // approve the router to spend tokens based on amountIn
-            TransferHelper.safeApprove(path[0], address(swapRouter), amountIn);
+            TransferHelper.safeApprove(
+                path[0], 
+                address(swapRouter), 
+                amountIn
+            );
         }
 
         // set swap options with user params
@@ -233,7 +293,6 @@ contract CrossChainSwapV3 {
         }
     }
 
-    //function swapExactInToV2(
     function swapExactInAndTransfer(
         SwapHelper.ExactInParameters calldata swapParams,
         address[] calldata path,
@@ -243,8 +302,14 @@ contract CrossChainSwapV3 {
         uint32 nonce
     ) external {  
         // makes sure the relayer is left whole after the second swap 
-        require(swapParams.amountOutMinimum > relayerFee, "insufficient amountOutMinimum to pay relayer");
-        require(path[1]==feeTokenAddress, "tokenOut must be UST for first swap");  
+        require(
+            swapParams.amountOutMinimum > relayerFee, 
+            "insufficient amountOutMinimum to pay relayer"
+        );
+        require(
+            path[1]==feeTokenAddress, 
+            "tokenOut must be UST for first swap"
+        );  
 
         // peform the first swap
         uint256 amountOut = _swapExactInBeforeTransfer(
@@ -270,15 +335,24 @@ contract CrossChainSwapV3 {
         );
 
         // approve token bridge to spend feeTokens (UST)
-        TransferHelper.safeApprove(feeTokenAddress, tokenBridgeAddress, amountOut);
+        TransferHelper.safeApprove(
+            feeTokenAddress, 
+            tokenBridgeAddress, 
+            amountOut
+        );
 
         // send transfer with payload to the TokenBridge
         TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, amountOut, targetChainId, targetContractAddress, relayerFee, nonce, payload
+            feeTokenAddress, 
+            amountOut, 
+            targetChainId, 
+            targetContractAddress, 
+            relayerFee, 
+            nonce, 
+            payload
         );
     }  
 
-    //function swapExactNativeInToV2(
     function swapExactNativeInAndTransfer(
         SwapHelper.ExactInParameters calldata swapParams,
         address[] calldata path,
@@ -287,10 +361,19 @@ contract CrossChainSwapV3 {
         bytes32 targetContractAddress,
         uint32 nonce
     ) external payable {  
-        require(swapParams.amountOutMinimum > relayerFee, "insufficient amountOutMinimum to pay relayer");
-        require(path[0]==wrappedEth, "tokenIn must be wETH for first swap");
-        require(path[1]==feeTokenAddress, "tokenOut must be UST for first swap"); 
-        require(msg.value > 0, "must pass non 0 ETH amount");
+        require(
+            swapParams.amountOutMinimum > relayerFee, 
+            "insufficient amountOutMinimum to pay relayer"
+        );
+        require(
+            path[0]==wrappedNative, 
+            "tokenIn must be wrapped native asset for first swap"
+        );
+        require(
+            path[1]==feeTokenAddress, 
+            "tokenOut must be UST for first swap"
+        ); 
+        require(msg.value > 0, "must pass non 0 native asset amount");
 
         // peform the first swap
         uint256 amountOut = _swapExactInBeforeTransfer(
@@ -316,15 +399,24 @@ contract CrossChainSwapV3 {
         );
 
         // approve token bridge to spend feeTokens (UST)
-        TransferHelper.safeApprove(feeTokenAddress, tokenBridgeAddress, amountOut);
+        TransferHelper.safeApprove(
+            feeTokenAddress, 
+            tokenBridgeAddress, 
+            amountOut
+        );
 
         // send transfer with payload to the TokenBridge
         TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, amountOut, targetChainId, targetContractAddress, relayerFee, nonce, payload
+            feeTokenAddress, 
+            amountOut, 
+            targetChainId, 
+            targetContractAddress, 
+            relayerFee, 
+            nonce, 
+            payload
         );
     }
 
-    //function swapExactNativeOutFromV2(
     function recvAndSwapExactNativeOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
@@ -337,8 +429,14 @@ contract CrossChainSwapV3 {
             );
 
         // check path elements 
-        require(payload.path[0]==feeTokenAddress, "tokenIn must be UST");
-        require(payload.path[1]==wrappedEth, "tokenOut must be wETH");
+        require(
+            payload.path[0]==feeTokenAddress, 
+            "tokenIn must be UST"
+        );
+        require(
+            payload.path[1]==wrappedNative, 
+            "tokenOut must be wrapped native asset"
+        );
 
         // amountOut is the estimated swap amount for exact out methods
         uint256 amountOut = payload.estimatedAmount;
@@ -350,7 +448,11 @@ contract CrossChainSwapV3 {
         uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
 
         // approve the router to spend swapAmount - which is maxAmountIn in payload
-        TransferHelper.safeApprove(payload.path[0], address(swapRouter), maxAmountInLessFees); 
+        TransferHelper.safeApprove(
+            payload.path[0], 
+            address(swapRouter), 
+            maxAmountInLessFees
+        ); 
 
         // set swap options with user params
         ISwapRouter.ExactOutputSingleParams memory params =
@@ -358,7 +460,7 @@ contract CrossChainSwapV3 {
                 tokenIn: payload.path[0],
                 tokenOut: payload.path[1],
                 fee: payload.poolFee,
-                recipient: address(this), // send wETH to this contract, then unwrap and send to recipient
+                recipient: address(this), 
                 deadline: payload.deadline,
                 amountOut: amountOut,
                 amountInMaximum: maxAmountInLessFees, 
@@ -368,21 +470,49 @@ contract CrossChainSwapV3 {
         try swapRouter.exactOutputSingle(params) returns (uint256 amountInUsed) {
             // refund recipient with any UST not used in the swap
             if (amountInUsed < maxAmountInLessFees) {
-                TransferHelper.safeApprove(feeTokenAddress, address(swapRouter), 0);
-                feeToken.safeTransfer(payload.recipientAddress, maxAmountInLessFees - amountInUsed);  
+                TransferHelper.safeApprove(
+                    feeTokenAddress, 
+                    address(swapRouter), 
+                    0
+                );
+                feeToken.safeTransfer(
+                    payload.recipientAddress, 
+                    maxAmountInLessFees - amountInUsed
+                );  
             }
-            // unwrap the wETH this contract received from the swap and send to recipient
-            IWETH(wrappedEth).withdraw(amountOut);
+
+            // unwrap native and send to recipient 
+            IWETH(wrappedNative).withdraw(amountOut);
             payable(payload.recipientAddress).transfer(amountOut);
-            emit SwapResult(payload.recipientAddress, payload.path[1], msg.sender, amountOut);
+
+            // used in UI to tell user they're getting
+            // their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[1], 
+                msg.sender, 
+                amountOut,
+                1
+            );
             return amountInUsed;
         } catch {
-            feeToken.safeTransfer(payload.recipientAddress, maxAmountInLessFees);
-            emit SwapResult(payload.recipientAddress, payload.path[0], msg.sender, maxAmountInLessFees);
+            // swap failed - return UST to recipient
+            feeToken.safeTransfer(
+                payload.recipientAddress, 
+                maxAmountInLessFees
+            );
+            // used in UI to tell user they're getting
+            // UST instead of their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[0], 
+                msg.sender, 
+                maxAmountInLessFees,
+                0
+            );
         }
     }
 
-    //function swapExactOutFromV2(
     function recvAndSwapExactOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
@@ -407,7 +537,11 @@ contract CrossChainSwapV3 {
         uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
 
         // approve the router to spend swapAmount - which is maxAmountIn in payload
-        TransferHelper.safeApprove(payload.path[0], address(swapRouter), maxAmountInLessFees); 
+        TransferHelper.safeApprove(
+            payload.path[0], 
+            address(swapRouter), 
+            maxAmountInLessFees
+        ); 
 
         // set swap options with user params
         ISwapRouter.ExactOutputSingleParams memory params =
@@ -425,14 +559,43 @@ contract CrossChainSwapV3 {
         try swapRouter.exactOutputSingle(params) returns (uint256 amountInUsed) {
             // refund recipient with any UST not used in the swap
             if (amountInUsed < maxAmountInLessFees) {
-                TransferHelper.safeApprove(feeTokenAddress, address(swapRouter), 0);
-                feeToken.safeTransfer(payload.recipientAddress, maxAmountInLessFees - amountInUsed);  
+                TransferHelper.safeApprove(
+                    feeTokenAddress, 
+                    address(swapRouter), 
+                    0
+                );
+                feeToken.safeTransfer(
+                    payload.recipientAddress, 
+                    maxAmountInLessFees - amountInUsed
+                );  
             }
-            emit SwapResult(payload.recipientAddress, payload.path[1], msg.sender, amountOut);
+
+            // used in UI to tell user they're getting
+            // their desired token
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[1], 
+                msg.sender, 
+                amountOut,
+                1
+            );
             return amountInUsed;
         } catch {
-             feeToken.safeTransfer(payload.recipientAddress, maxAmountInLessFees);
-            emit SwapResult(payload.recipientAddress, payload.path[0], msg.sender, maxAmountInLessFees);
+            // swap failed - return UST to recipient
+            feeToken.safeTransfer(
+                payload.recipientAddress, 
+                maxAmountInLessFees
+            );
+
+            // used in UI to tell user they're getting
+            // UST instead of their desired native asset
+            emit SwapResult(
+                payload.recipientAddress, 
+                payload.path[0], 
+                msg.sender, 
+                maxAmountInLessFees,
+                0
+            );
         }
     }
 
@@ -450,9 +613,18 @@ contract CrossChainSwapV3 {
 
         if (swapType == typeTokenSwap) {
             // transfer tokens to this contract
-            // approve uniswap router 
-            token.safeTransferFrom(contractCaller, address(this), amountInMaximum);
-            TransferHelper.safeApprove(path[0], address(swapRouter), amountInMaximum);
+            token.safeTransferFrom(
+                contractCaller, 
+                address(this), 
+                amountInMaximum
+            );
+
+            // approve the router to spend tokens
+            TransferHelper.safeApprove(
+                path[0], 
+                address(swapRouter), 
+                amountInMaximum
+            );
         }
 
         // set swap options with user params
@@ -474,23 +646,26 @@ contract CrossChainSwapV3 {
             // return any amountIn not used in the swap to contractCaller
             if (amountInUsed < amountInMaximum) {
                 TransferHelper.safeApprove(path[0], address(swapRouter), 0);
-                token.safeTransfer(contractCaller, amountInMaximum - amountInUsed);
+                token.safeTransfer(
+                    contractCaller, 
+                    amountInMaximum - amountInUsed
+                );
             }
         } else { // native swap 
             // executes the swap returning the amountInUsed 
             // ask for our money back -_- after the swap executes        
-            uint256 amountInUsed = 
-                swapRouter.exactOutputSingle{value: amountInMaximum}(params);
+            uint256 amountInUsed = swapRouter.exactOutputSingle{value: amountInMaximum}(params);
             swapRouter.refundETH();
-            // return any amountIn not used in the swap to contractCaller
+            // return unused native asset to contractCaller
             if (amountInUsed < amountInMaximum) {
                 TransferHelper.safeApprove(path[0], address(swapRouter), 0);
-                payable(contractCaller).transfer(amountInMaximum - amountInUsed);
+                payable(contractCaller).transfer(
+                    amountInMaximum - amountInUsed
+                );
             }
         }
     }
 
-    //function swapExactOutToV2(
     function swapExactOutAndTransfer(
         SwapHelper.ExactOutParameters calldata swapParams,
         address[] calldata path,
@@ -550,7 +725,6 @@ contract CrossChainSwapV3 {
         );
     }
 
-    //function swapExactNativeOutToV2(
     function swapExactNativeOutAndTransfer(
         SwapHelper.ExactOutParameters calldata swapParams,
         address[] calldata path,
@@ -564,19 +738,19 @@ contract CrossChainSwapV3 {
             "insufficient amountOut to pay relayer"
         );
         require(
-            path[0]==wrappedEth, 
-            "tokenIn must be wETH for first swap"
+            path[0]==wrappedNative, 
+            "tokenIn must be wrapped native asset for first swap"
         );
         require(
             path[1]==feeTokenAddress, 
             "tokenOut must be UST for first swap"
         );
-        require(msg.value > 0, "must pass non 0 ETH amount");
+        require(msg.value > 0, "must pass non 0 native asset amount");
 
         // peform the first swap
         _swapExactOutBeforeTransfer(
             swapParams.amountOut, 
-            msg.value, // ETH value sent in transaction is the maximumAmountIn 
+            msg.value, // native asset value sent in transaction is the maximumAmountIn 
             msg.sender,
             path[0:2], 
             swapParams.deadline,
@@ -615,6 +789,6 @@ contract CrossChainSwapV3 {
         );
     }
 
-    // we need to accept ETH sends to unwrap WETH
+    // we need to accept native assets sends for unwrapping 
     receive() external payable {}
 }
