@@ -7,8 +7,6 @@ import {
   getEmitterAddressEth,
   getEmitterAddressSolana,
   getEmitterAddressTerra,
-  getIsTransferCompletedEth,
-  redeemOnEth,
 } from "@certusone/wormhole-sdk";
 
 import {
@@ -21,9 +19,18 @@ import {
   subscribeSignedVAA,
 } from "@certusone/wormhole-spydk";
 
+import { ethers } from "ethers";
+
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../../react/src/addresses/goerli";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../../react/src/addresses/mumbai";
+import { abi as SWAP_CONTRACT_V2_ABI } from "../../react/src/abi/contracts/CrossChainSwapV2.json";
+import { abi as SWAP_CONTRACT_V3_ABI } from "../../react/src/abi/contracts/CrossChainSwapV3.json";
+
+import * as swap from "../../react/src/swapper/util";
+
 let logger: any;
 
-let configFile: string = ".env.sample";
+let configFile: string = ".env";
 if (process.env.SWAP_RELAY_CONFIG) {
   configFile = process.env.SWAP_RELAY_CONFIG;
 }
@@ -36,10 +43,19 @@ initLogger();
 type OurEnvironment = {
   spy_host: string;
   spy_filters: string;
-  target_chain_id: number;
-  target_node_url: string;
-  target_private_key: string;
-  target_contract_address: string;
+  eth_provider_url: string;
+  polygon_provider_url: string;
+  wallet_private_key: string;
+  eth_contract_address: string;
+  polygon_contract_address: string;
+};
+
+type TargetContractData = {
+  contractAddress: string;
+  contract: ethers.Contract;
+  provider: ethers.providers.StaticJsonRpcProvider;
+  wallet: ethers.Wallet;
+  contractWithSigner: ethers.Contract;
 };
 
 setDefaultWasm("node");
@@ -48,6 +64,9 @@ let success: boolean;
 let env: OurEnvironment;
 [success, env] = loadConfig();
 
+let ethContractData: TargetContractData = null;
+let polygonContractData: TargetContractData = null;
+
 if (success) {
   logger.info(
     "swap_relay starting up, will listen for signed VAAs from [" +
@@ -55,17 +74,17 @@ if (success) {
       "]"
   );
 
-  logger.info(
-    "will relay to EVM chainId: [" +
-      env.target_chain_id +
-      "], nodeUrl: [" +
-      env.target_node_url +
-      "], contractAddress: [" +
-      env.target_contract_address +
-      "]"
-  );
+  try {
+    ethContractData = makeEthContractData();
+    polygonContractData = makePolygonContractData();
+  } catch (e: any) {
+    logger.error("failed to connect to target contracts: %o", e);
+    success = false;
+  }
 
-  spy_listen();
+  if (success) {
+    spy_listen();
+  }
 }
 
 function loadConfig(): [boolean, OurEnvironment] {
@@ -73,20 +92,16 @@ function loadConfig(): [boolean, OurEnvironment] {
     logger.error("Missing environment variable SPY_SERVICE_HOST");
     return [false, undefined];
   }
-  if (!process.env.EVM_CHAIN_ID) {
-    logger.error("Missing environment variable EVM_CHAIN_ID");
+  if (!process.env.ETH_PROVIDER) {
+    logger.error("Missing environment variable ETH_PROVIDER");
     return [false, undefined];
   }
-  if (!process.env.EVM_NODE_URL) {
-    logger.error("Missing environment variable EVM_NODE_URL");
+  if (!process.env.POLYGON_PROVIDER) {
+    logger.error("Missing environment variable POLYGON_PROVIDER");
     return [false, undefined];
   }
-  if (!process.env.EVM_PRIVATE_KEY) {
-    logger.error("Missing environment variable EVM_PRIVATE_KEY");
-    return [false, undefined];
-  }
-  if (!process.env.EVM_CONTRACT_ADDRESS) {
-    logger.error("Missing environment variable EVM_CONTRACT_ADDRESS");
+  if (!process.env.WALLET_PRIVATE_KEY) {
+    logger.error("Missing environment variable WALLET_PRIVATE_KEY");
     return [false, undefined];
   }
 
@@ -95,10 +110,11 @@ function loadConfig(): [boolean, OurEnvironment] {
     {
       spy_host: process.env.SPY_SERVICE_HOST,
       spy_filters: process.env.SPY_SERVICE_FILTERS,
-      target_chain_id: parseInt(process.env.EVM_CHAIN_ID),
-      target_node_url: process.env.EVM_NODE_URL,
-      target_private_key: process.env.EVM_PRIVATE_KEY,
-      target_contract_address: process.env.EVM_CONTRACT_ADDRESS,
+      eth_provider_url: process.env.ETH_PROVIDER,
+      polygon_provider_url: process.env.POLYGON_PROVIDER,
+      wallet_private_key: process.env.WALLET_PRIVATE_KEY,
+      eth_contract_address: process.env.ETH_CONTRACT_ADDRESS,
+      polygon_contract_address: process.env.POLYGON_CONTRACT_ADDRESS,
     },
   ];
 }
@@ -205,7 +221,7 @@ async function processVaa(vaaBytes) {
     );
 
     try {
-      //await relayVaa(vaaBytes);
+      await relayVaa(vaaBytes, t3Payload);
     } catch (e) {
       logger.error("failed to relay type 3 vaa: %o", e);
     }
@@ -243,31 +259,334 @@ function decodeSignedVAAPayloadType3(parsedVAA: any): Type3Payload {
   };
 }
 
-import { ethers } from "ethers";
+// Ethereum (Goerli) set up
+function makeEthContractData(): TargetContractData {
+  let overridden: boolean = false;
+  let contractAddress: string = CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM;
+  if (env.eth_contract_address) {
+    contractAddress = env.eth_contract_address;
+    overridden = true;
+  }
 
-async function relayVaa(vaaBytes: string) {
+  contractAddress = contractAddress.toLowerCase();
+  if (contractAddress.search("0x") == 0) {
+    contractAddress = contractAddress.substring(2);
+  }
+
+  if (overridden) {
+    logger.info(
+      "Connecting to Ethereum: node [" +
+        env.eth_provider_url +
+        "], overriding contract address to [" +
+        contractAddress +
+        "]"
+    );
+  } else {
+    logger.info(
+      "Connecting to Ethereum: node [" +
+        env.eth_provider_url +
+        "], contract address [" +
+        contractAddress +
+        "]"
+    );
+  }
+
+  const provider = new ethers.providers.StaticJsonRpcProvider(
+    env.eth_provider_url
+  );
+
+  const contract = new ethers.Contract(
+    contractAddress,
+    SWAP_CONTRACT_V3_ABI,
+    provider
+  );
+
+  const wallet = new ethers.Wallet(env.wallet_private_key, provider);
+  const contractWithSigner = contract.connect(wallet);
+
+  return {
+    contractAddress: contractAddress,
+    contract: contract,
+    provider: provider,
+    wallet: wallet,
+    contractWithSigner: contractWithSigner,
+  };
+}
+
+// Polygon (Mumbai) set up
+function makePolygonContractData(): TargetContractData {
+  let overridden: boolean = false;
+  let contractAddress: string = CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON;
+  if (env.polygon_contract_address) {
+    contractAddress = env.polygon_contract_address;
+    overridden = true;
+  }
+
+  contractAddress = contractAddress.toLowerCase();
+  if (contractAddress.search("0x") == 0) {
+    contractAddress = contractAddress.substring(2);
+  }
+
+  if (overridden) {
+    logger.info(
+      "Connecting to Polygon: node [" +
+        env.polygon_provider_url +
+        "], overriding contract address to [" +
+        contractAddress +
+        "]"
+    );
+  } else {
+    logger.info(
+      "Connecting to Polygon: node [" +
+        env.polygon_provider_url +
+        "], contract address [" +
+        contractAddress +
+        "]"
+    );
+  }
+
+  const provider = new ethers.providers.StaticJsonRpcProvider(
+    env.polygon_provider_url
+  );
+
+  const contract = new ethers.Contract(
+    contractAddress,
+    SWAP_CONTRACT_V2_ABI,
+    provider
+  );
+
+  const wallet = new ethers.Wallet(env.wallet_private_key, provider);
+  const contractWithSigner = contract.connect(wallet);
+
+  return {
+    contractAddress: contractAddress,
+    contract: contract,
+    provider: provider,
+    wallet: wallet,
+    contractWithSigner: contractWithSigner,
+  };
+}
+
+/*
+  // GOERLI_PROVIDER = Ethereum
+  // MUMBAI_PROVIDER = Polygon
+
+  if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM) {
+    // Use one of the V3 swap methods.
+  } else if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON) {
+    // Use one of the V2 swap methods.
+  } else {
+    // Error
+  }
+
+  if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 1) {
+    // swapExactInFromVaaNative
+  } else if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 2) {
+    // swapExactInFromVaaToken    
+  } else if (
+    t3Payload.swapFunctionType === 2 &&  t3Payload.swapCurrencyType === 1) {
+    // swapExactOutFromVaaNative
+  } else if (t3Payload.swapFunctionType === 2 && t3Payload.swapCurrencyType === 2) {
+    // swapExactOutFromVaaToken
+  } else {
+    // error
+  }
+*/
+
+async function relayVaa(vaaBytes: string, t3Payload: Type3Payload) {
   const signedVaaArray = hexToUint8Array(vaaBytes);
-  const provider = new ethers.providers.WebSocketProvider(env.target_node_url);
 
-  const signer = new ethers.Wallet(env.target_private_key, provider);
-  const receipt = await redeemOnEth(
-    env.target_contract_address,
-    signer,
-    signedVaaArray
-  );
+  let exactIn: boolean = false;
+  if (t3Payload.swapFunctionType === 1) {
+    exactIn = true;
+  } else if (t3Payload.swapFunctionType !== 2) {
+    logger.error(
+      "unable to relay vaa: unsupported swapFunctionType: [" +
+        t3Payload.swapFunctionType +
+        "]"
+    );
+  }
 
-  let success = await getIsTransferCompletedEth(
-    env.target_contract_address,
-    provider,
-    signedVaaArray
-  );
-
-  provider.destroy();
+  let native: boolean = false;
+  if (t3Payload.swapCurrencyType === 1) {
+    native = true;
+  } else if (t3Payload.swapCurrencyType !== 2) {
+    logger.error(
+      "unable to relay vaa: unsupported swapCurrencyType: [" +
+        t3Payload.swapCurrencyType +
+        "]"
+    );
+  }
 
   logger.info(
-    "redeemed on evm: success: " + success + ", receipt: %o",
-    receipt
+    "relayVaa: contractAddress: [" +
+      t3Payload.contractAddress +
+      "], ethContract: [" +
+      ethContractData.contractAddress +
+      "], polygonContract[" +
+      polygonContractData.contractAddress +
+      "]"
   );
+
+  if (t3Payload.contractAddress === ethContractData.contractAddress) {
+    await relayVaaToEth(signedVaaArray, exactIn, native);
+  } else if (
+    t3Payload.contractAddress === polygonContractData.contractAddress
+  ) {
+    await relayVaaToPolygon(signedVaaArray, exactIn, native);
+  } else {
+    logger.error(
+      "unable to relay vaa: unsupported contract: [" +
+        t3Payload.contractAddress +
+        "]"
+    );
+  }
+}
+
+async function relayVaaToEth(
+  signedVaaArray: Uint8Array,
+  exactIn: boolean,
+  native: boolean
+) {
+  logger.info("relayVaaToEth: exactIn: " + exactIn + ", native: " + native);
+  if (exactIn) {
+    if (native) {
+      await swap
+        .swapExactInFromVaaNativeV3(
+          ethContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToEth: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToEth: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    } else {
+      await swap
+        .swapExactInFromVaaTokenV3(
+          ethContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToEth: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToEth: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    }
+  } else {
+    if (native) {
+      await swap
+        .swapExactOutFromVaaNativeV3(
+          ethContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToEth: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToEth: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    } else {
+      await swap
+        .swapExactOutFromVaaTokenV3(
+          ethContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToEth: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToEth: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    }
+  }
+}
+
+async function relayVaaToPolygon(
+  signedVaaArray: Uint8Array,
+  exactIn: boolean,
+  native: boolean
+) {
+  logger.info("relayVaaToPolygon: exactIn: " + exactIn + ", native: " + native);
+  if (exactIn) {
+    if (native) {
+      await swap
+        .swapExactInFromVaaNativeV2(
+          polygonContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToPolygon: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToPolygon: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    } else {
+      await swap
+        .swapExactInFromVaaTokenV2(
+          polygonContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToPolygon: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToPolygon: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    }
+  } else {
+    if (native) {
+      await swap
+        .swapExactOutFromVaaNativeV2(
+          polygonContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToPolygon: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToPolygon: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    } else {
+      await swap
+        .swapExactOutFromVaaTokenV2(
+          polygonContractData.contractWithSigner,
+          signedVaaArray
+        )
+        .then((receipt) => {
+          logger.info("relayVaaToPolygon: %o", receipt.transactionHash);
+        })
+        .catch((error) => {
+          logger.error(
+            "relayVaaToPolygon: transaction failed: %o",
+            error.transactionHash
+          );
+        });
+    }
+  }
 }
 
 ///////////////////////////////// Start of logger stuff ///////////////////////////////////////////

@@ -92,7 +92,8 @@ $ docker run --platform linux/amd64 --network=host spy_guardian \
 
 ```
 $ cd swap_relayer
-$ # Edit the .env.sample, be sure to set a valid wallet private key.
+$ cp .env.sample .env
+$ # Edit the parameters in .env as appropriate.
 $ npm ci
 $ npm run build
 $ npm run start

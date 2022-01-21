@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node lib/index.js"
+    "start": "node lib/swap_relayer/src/index.js"
   },
   "author": "",
   "license": "Apache-2.0",
@@ -16,7 +16,7 @@
     "@types/node": "^16.6.1",
     "axios": "^0.24.0",
     "esm": "^3.2.25",
-    "ethers": "^5.4.4",
+    "ethers": "^5.5.3",
     "jest": "^27.3.1",
     "prettier": "^2.3.2",
     "ts-jest": "^27.0.7",
