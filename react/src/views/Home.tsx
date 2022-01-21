@@ -280,7 +280,7 @@ export default function Home() {
         });
         const isCompleted = await getIsTransferCompletedEvmWithRetry(
           executor.dstExecutionParams.wormhole.tokenBridgeAddress,
-          executor.quoter.dstProvider, //provider,
+          executor.quoter.dstProvider,
           vaaBytes,
           // retry for two minutes
           3000,

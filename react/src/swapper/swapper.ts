@@ -1,4 +1,3 @@
-//@ts-nocheck
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
@@ -113,11 +112,7 @@ async function approveContractTokenSpend(
     amount
   );
 
-  // TODO: pass this in?
   const address = await signer.getAddress();
-  console.log("address", address);
-
-  console.log("signer", signer);
 
   // gas calcs
   const gas_limit = "0x100000";
@@ -166,7 +161,11 @@ function addressToBytes32(
   address: string,
   wormholeChainId: ChainId
 ): Uint8Array {
-  return hexToUint8Array(nativeToHexString(address, wormholeChainId));
+  const hexString = nativeToHexString(address, wormholeChainId);
+  if (hexString === null) {
+    throw new Error("nativeToHexString returned null");
+  }
+  return hexToUint8Array(hexString);
 }
 
 async function approveAndSwapExactIn(
@@ -191,25 +190,12 @@ async function approveAndSwapExactIn(
   // approve and swap this amount
   const amountIn = quoteParams.src.amountIn;
 
-  /*
-  // approve swap contract to spend our tokens
-  console.info("approving contract to spend token in");
-  await approveContractTokenSpend(
-    srcProvider,
-    srcWallet,
-    srcTokenIn.getContract(),
-    swapContract.address,
-    amountIn
-  );
-  */
-
   const address = await srcWallet.getAddress();
 
   const swapParams = [
     amountIn,
     quoteParams.src.minAmountOut,
     quoteParams.dst.minAmountOut,
-    // srcWallet.address,
     address,
     quoteParams.src.deadline,
     quoteParams.dst.poolFee || quoteParams.src.poolFee,
@@ -338,29 +324,6 @@ async function approveAndSwapExactOut(
   const amountOut = quoteParams.src.amountOut;
   const maxAmountIn = quoteParams.src.maxAmountIn;
 
-  /*
-      // approve swap contract to spend our tokens
-      console.info('approving contract to spend token in'); 
-      await approveContractTokenSpend(
-          srcProvider,
-          srcWallet, 
-          srcTokenIn.getContract(),
-          swapContract.address, 
-          maxAmountIn,
-      ); 
-      */
-
-  /*
-      struct ExactOutParameters {
-          uint256 amountOut;
-          uint256 amountInMaximum;
-          uint256 targetAmountOut;
-          address targetChainRecipient;
-          uint256 deadline;
-          uint24 poolFee;
-      }
-      */
-
   const address = await srcWallet.getAddress();
 
   const swapParams = [
@@ -380,7 +343,6 @@ async function approveAndSwapExactOut(
   );
   const bridgeNonce = 69;
 
-  //const fakeRelayerFee = quoteParams.relayerFee.amount;
   // do the swap
   if (protocol === PROTOCOL_UNISWAP_V2) {
     console.info("approving contract to spend token in");
@@ -604,8 +566,6 @@ export class UniswapToUniswapExecutor {
     tokenOutAddress: string,
     isNative: boolean
   ): Promise<void> {
-    this.clearState();
-
     this.isNative = isNative;
 
     const srcProvider = makeProvider(tokenInAddress);
@@ -679,8 +639,6 @@ export class UniswapToUniswapExecutor {
       throw Error("undefined swap parameters");
     }
 
-    this.clearCachedParams();
-
     this.cachedExactInParams = await this.quoter.computeExactInParameters(
       amountIn,
       this.slippage,
@@ -697,8 +655,6 @@ export class UniswapToUniswapExecutor {
       throw Error("undefined swap parameters");
     }
 
-    this.clearCachedParams();
-
     this.cachedExactOutParams = await this.quoter.computeExactOutParameters(
       amountOut,
       this.slippage,
@@ -706,12 +662,6 @@ export class UniswapToUniswapExecutor {
     );
     this.quoteType = QuoteType.ExactOut;
     return this.cachedExactOutParams;
-  }
-
-  clearCachedParams(): void {
-    this.cachedExactInParams = undefined;
-    this.cachedExactOutParams = undefined;
-    this.quoteType = undefined;
   }
 
   getSrcProvider(): ethers.providers.Provider {
@@ -780,14 +730,9 @@ export class UniswapToUniswapExecutor {
       ),
       emitterAddress: getEmitterAddressEth(wormholeParams.tokenBridgeAddress),
     };
-    return;
   }
 
   async fetchSignedVaaFromSwap(): Promise<void> {
-    if (this.vaaBytes !== undefined) {
-      //   console.warn("vaaBytes are defined");
-      return;
-    }
     const vaaSearchParams = this.vaaSearchParams;
     if (vaaSearchParams === undefined) {
       throw Error("no vaa search params found");
@@ -801,11 +746,9 @@ export class UniswapToUniswapExecutor {
       this.srcExecutionParams.wormhole.chainId,
       vaaSearchParams.emitterAddress,
       vaaSearchParams.sequence
-      // TODO: this is where we passed the transport
     );
     // grab vaaBytes
     this.vaaBytes = vaaResponse.vaaBytes;
-    return;
   }
 
   async fetchVaaAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
@@ -820,9 +763,6 @@ export class UniswapToUniswapExecutor {
     } else {
       throw Error("no quote found");
     }
-
-    // console.info("clearing state");
-    this.clearState();
 
     return this.dstReceipt;
   }
@@ -849,18 +789,5 @@ export class UniswapToUniswapExecutor {
       this.vaaBytes,
       this.isNative
     );
-  }
-  clearState(): void {
-    // TODO: after the whole swap, clear the state of everything
-    this.vaaBytes = undefined;
-
-    // clear src receipt only
-    this.srcReceipt = undefined;
-
-    // clear params
-    this.cachedExactInParams = undefined;
-    this.cachedExactOutParams = undefined;
-    this.quoteType = undefined;
-    return;
   }
 }
