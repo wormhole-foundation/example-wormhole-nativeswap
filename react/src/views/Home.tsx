@@ -138,7 +138,7 @@ export default function Home() {
   const classes = useStyles();
   const [sourceTokenInfo, setSourceTokenInfo] = useState(WMATIC_TOKEN_INFO);
   const [targetTokenInfo, setTargetTokenInfo] = useState(WETH_TOKEN_INFO);
-  const [amountIn, setAmountIn] = useState("0.0");
+  const [amountIn, setAmountIn] = useState("");
   const [amountOut, setAmountOut] = useState("0.0");
   const [deadline, setDeadline] = useState("30");
   const [slippage, setSlippage] = useState("1");
@@ -351,6 +351,7 @@ export default function Home() {
             InputProps={{ disableUnderline: true }}
             className={classes.numberField}
             onChange={handleAmountChange}
+            placeholder="0.0"
           ></TextField>
           <div className={classes.spacer} />
           <TokenSelect
