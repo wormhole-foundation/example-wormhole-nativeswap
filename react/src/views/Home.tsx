@@ -1,22 +1,26 @@
 import {
   Container,
+  Link,
   makeStyles,
   Paper,
   TextField,
   Typography,
 } from "@material-ui/core";
-import { ChainId } from "@certusone/wormhole-sdk";
+import { ChainId, getSignedVAAWithRetry } from "@certusone/wormhole-sdk";
 import { useCallback, useEffect, useState } from "react";
 import ButtonWithLoader from "../components/ButtonWithLoader";
 import EthereumSignerKey from "../components/EthereumSignerKey";
 import TokenSelect from "../components/TokenSelect";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
 import {
+  ETH_TOKEN_INFO,
   getEvmChainId,
+  MATIC_TOKEN_INFO,
   RELAYER_FEE_UST,
   TOKEN_INFOS,
   WETH_TOKEN_INFO,
   WMATIC_TOKEN_INFO,
+  WORMHOLE_RPC_HOSTS,
 } from "../utils/consts";
 import { COLORS } from "../muiTheme";
 import Wormhole from "../icons/wormhole-network.svg";
@@ -28,6 +32,7 @@ import { useSnackbar } from "notistack";
 import { Alert } from "@material-ui/lab";
 import parseError from "../utils/parseError";
 import Settings from "../components/Settings";
+import getIsTransferCompletedEvmWithRetry from "../utils/getIsTransferCompletedWithRetry";
 
 const useStyles = makeStyles((theme) => ({
   bg: {
@@ -160,7 +165,8 @@ export default function Home() {
           const executor = new UniswapToUniswapExecutor();
           await executor.initialize(
             sourceTokenInfo.address,
-            targetTokenInfo.address
+            targetTokenInfo.address,
+            sourceTokenInfo.isNative
           );
           await executor.computeAndVerifySrcPoolAddress().catch((e) => {
             throw new Error("failed to verify source pool address");
@@ -225,12 +231,19 @@ export default function Home() {
   }, []);
 
   const handleSourceChange = useCallback((event) => {
+    // NOTE: only native-to-native or wrapped-to-wrapped swaps are currently supported
     if (event.target.value === WMATIC_TOKEN_INFO.name) {
       setSourceTokenInfo(WMATIC_TOKEN_INFO);
       setTargetTokenInfo(WETH_TOKEN_INFO);
-    } else {
+    } else if (event.target.value === WETH_TOKEN_INFO.name) {
       setSourceTokenInfo(WETH_TOKEN_INFO);
       setTargetTokenInfo(WMATIC_TOKEN_INFO);
+    } else if (event.target.value === ETH_TOKEN_INFO.name) {
+      setSourceTokenInfo(ETH_TOKEN_INFO);
+      setTargetTokenInfo(MATIC_TOKEN_INFO);
+    } else {
+      setSourceTokenInfo(MATIC_TOKEN_INFO);
+      setTargetTokenInfo(ETH_TOKEN_INFO);
     }
     setAmountIn("0.0");
     setAmountOut("0.0");
@@ -242,13 +255,53 @@ export default function Home() {
         setIsSwapping(true);
         await switchProviderNetwork(provider, sourceTokenInfo.chainId);
         const sourceReceipt = await executor.approveAndSwap(signer);
-        console.info(`src transaction: ${sourceReceipt.transactionHash}`);
-        await switchProviderNetwork(provider, targetTokenInfo.chainId);
-        const targetReceipt = await executor.fetchVaaAndSwap(signer);
-        console.info(`dst transaction: ${targetReceipt.transactionHash}`);
+        console.info(
+          "firstSwapTransactionHash:",
+          sourceReceipt.transactionHash
+        );
+
+        // Wait for the guardian network to reach consensus and emit the signedVAA
         enqueueSnackbar(null, {
-          content: <Alert severity="success">Success!</Alert>,
+          content: <Alert severity="info">Fetching VAA</Alert>,
         });
+        const { vaaBytes } = await getSignedVAAWithRetry(
+          WORMHOLE_RPC_HOSTS,
+          executor.srcExecutionParams.wormhole.chainId,
+          executor.vaaSearchParams.emitterAddress,
+          executor.vaaSearchParams.sequence
+        );
+        //  Check if the signedVAA has redeemed by the relayer
+        enqueueSnackbar(null, {
+          content: (
+            <Alert severity="info">
+              Fetched the Signed VAA, waiting for relayer to redeem it
+            </Alert>
+          ),
+        });
+        const isCompleted = await getIsTransferCompletedEvmWithRetry(
+          executor.dstExecutionParams.wormhole.tokenBridgeAddress,
+          executor.quoter.dstProvider, //provider,
+          vaaBytes,
+          // retry for two minutes
+          3000,
+          40
+        );
+        if (isCompleted) {
+          enqueueSnackbar(null, {
+            content: <Alert severity="success">Swap completed</Alert>,
+          });
+        } else {
+          // If the relayer hasn't redeemed the signedVAA, then manually redeem it ourselves
+          await switchProviderNetwork(provider, targetTokenInfo.chainId);
+          const targetReceipt = await executor.fetchVaaAndSwap(signer);
+          enqueueSnackbar(null, {
+            content: <Alert severity="success">Swap completed</Alert>,
+          });
+          console.info(
+            "secondSwapTransactionHash:",
+            targetReceipt.transactionHash
+          );
+        }
       } catch (e: any) {
         console.error(e);
         enqueueSnackbar(null, {
@@ -329,6 +382,12 @@ export default function Home() {
           {"powered by wormhole"}
         </Typography>
         <img src={Wormhole} alt="Wormhole" className={classes.wormholeIcon} />
+        <div className={classes.spacer} />
+        <Link variant="subtitle2" href="https://goerli-faucet.slock.it/">
+          Goerli faucet
+        </Link>
+        <div />
+        <Link href="https://faucet.polygon.technology/">Mumbai faucet</Link>
       </Container>
     </div>
   );

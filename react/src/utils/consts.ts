@@ -7,30 +7,51 @@ import ethIcon from "../icons/eth.svg";
 import polygonIcon from "../icons/polygon.svg";
 
 export interface TokenInfo {
-  id: string;
   name: string;
   address: string;
   chainId: ChainId;
   logo: string;
+  isNative: boolean;
 }
 
+export const MATIC_TOKEN_INFO: TokenInfo = {
+  name: "MATIC",
+  address: "0x9c3c9283d3e44854697cd22d3faa240cfb032889", // used to compute quote
+  chainId: CHAIN_ID_POLYGON,
+  logo: polygonIcon,
+  isNative: true,
+};
+
 export const WMATIC_TOKEN_INFO: TokenInfo = {
-  id: "WMATIC",
   name: "WMATIC",
   address: "0x9c3c9283d3e44854697cd22d3faa240cfb032889",
   chainId: CHAIN_ID_POLYGON,
   logo: polygonIcon,
+  isNative: false,
+};
+
+export const ETH_TOKEN_INFO: TokenInfo = {
+  name: "ETH",
+  address: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6", // used to compute quote
+  chainId: CHAIN_ID_ETH,
+  logo: ethIcon,
+  isNative: true,
 };
 
 export const WETH_TOKEN_INFO: TokenInfo = {
-  id: "WETH",
   name: "WETH",
   address: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6",
   chainId: CHAIN_ID_ETH,
   logo: ethIcon,
+  isNative: false,
 };
 
-export const TOKEN_INFOS = [WMATIC_TOKEN_INFO, WETH_TOKEN_INFO];
+export const TOKEN_INFOS = [
+  MATIC_TOKEN_INFO,
+  WMATIC_TOKEN_INFO,
+  ETH_TOKEN_INFO,
+  WETH_TOKEN_INFO,
+];
 
 export const ETH_NETWORK_CHAIN_ID = 5;
 
@@ -43,7 +64,7 @@ export const getEvmChainId = (chainId: ChainId) =>
     ? POLYGON_NETWORK_CHAIN_ID
     : undefined;
 
-export const RELAYER_FEE_UST = "0.0001";
+export const RELAYER_FEE_UST = "0.25";
 
 export const WORMHOLE_RPC_HOSTS = [
   "https://wormhole-v2-testnet-api.certus.one",

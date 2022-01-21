@@ -43,7 +43,7 @@ import {
   swapExactOutFromVaaNativeV3,
   swapExactOutFromVaaTokenV2,
   swapExactOutFromVaaTokenV3,
-} from "util";
+} from "./util";
 import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
 import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
