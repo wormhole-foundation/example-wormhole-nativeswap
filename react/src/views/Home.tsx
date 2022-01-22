@@ -245,7 +245,7 @@ export default function Home() {
       setSourceTokenInfo(MATIC_TOKEN_INFO);
       setTargetTokenInfo(ETH_TOKEN_INFO);
     }
-    setAmountIn("0.0");
+    setAmountIn("");
     setAmountOut("0.0");
   }, []);
 
@@ -254,6 +254,7 @@ export default function Home() {
       try {
         setIsSwapping(true);
         await switchProviderNetwork(provider, sourceTokenInfo.chainId);
+
         const sourceReceipt = await executor.approveAndSwap(signer);
         console.info(
           "firstSwapTransactionHash:",
@@ -270,7 +271,6 @@ export default function Home() {
           executor.vaaSearchParams.emitterAddress,
           executor.vaaSearchParams.sequence
         );
-        //  Check if the signedVAA has redeemed by the relayer
         enqueueSnackbar(null, {
           content: (
             <Alert severity="info">
@@ -278,6 +278,7 @@ export default function Home() {
             </Alert>
           ),
         });
+        //  Check if the signedVAA has redeemed by the relayer
         const isCompleted = await getIsTransferCompletedEvmWithRetry(
           executor.dstExecutionParams.wormhole.tokenBridgeAddress,
           executor.quoter.dstProvider,
@@ -309,6 +310,7 @@ export default function Home() {
         });
       }
       setIsSwapping(false);
+      setAmountIn("");
     }
   }, [
     provider,
@@ -369,6 +371,7 @@ export default function Home() {
             className={classes.numberField}
             inputProps={{ readOnly: true }}
           ></TextField>
+          <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
           {!isSwapping && <EthereumSignerKey />}
           <ButtonWithLoader
             disabled={!readyToSwap || isSwapping}
@@ -377,6 +380,10 @@ export default function Home() {
           >
             Swap
           </ButtonWithLoader>
+          <div className={classes.spacer} />
+          <Typography variant="subtitle2" color="error">
+            WARNING: this is a Testnet release only
+          </Typography>
         </Paper>
         <div className={classes.spacer} />
         <Typography variant="subtitle1" color="textSecondary">

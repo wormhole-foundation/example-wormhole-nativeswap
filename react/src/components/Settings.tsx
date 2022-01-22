@@ -70,7 +70,9 @@ export default function Settings({
           type="number"
           onChange={(event) => {
             onSlippageChange(
-              clamp(parseFloat(event.target.value), 0, 100).toString()
+              event.target.value === ""
+                ? ""
+                : clamp(parseFloat(event.target.value), 0, 100).toString()
             );
           }}
         ></TextField>
@@ -88,7 +90,9 @@ export default function Settings({
           type="number"
           onChange={(event) => {
             onDeadlineChange(
-              clamp(parseFloat(event.target.value), 1, 100).toString()
+              event.target.value === ""
+                ? ""
+                : clamp(parseFloat(event.target.value), 1, 100).toString()
             );
           }}
         ></TextField>
