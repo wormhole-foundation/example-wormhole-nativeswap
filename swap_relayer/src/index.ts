@@ -590,11 +590,23 @@ async function relayVaa(vaaBytes: string, t3Payload: Type3Payload) {
   );
 
   if (t3Payload.contractAddress === ethContractData.contractAddress) {
-    await relayVaaToChain(ethContractData, signedVaaArray, exactIn, native);
+    await relayVaaToChain(
+      t3Payload,
+      ethContractData,
+      signedVaaArray,
+      exactIn,
+      native
+    );
   } else if (
     t3Payload.contractAddress === polygonContractData.contractAddress
   ) {
-    await relayVaaToChain(polygonContractData, signedVaaArray, exactIn, native);
+    await relayVaaToChain(
+      t3Payload,
+      polygonContractData,
+      signedVaaArray,
+      exactIn,
+      native
+    );
   } else {
     logger.error(
       "relayVaa: unexpected contract: [" +
@@ -605,6 +617,7 @@ async function relayVaa(vaaBytes: string, t3Payload: Type3Payload) {
 }
 
 async function relayVaaToChain(
+  t3Payload: Type3Payload,
   tcd: TargetContractData,
   signedVaaArray: Uint8Array,
   exactIn: boolean,
@@ -631,7 +644,9 @@ async function relayVaaToChain(
       logger.info(
         "relayVaaTo" +
           tcd.name +
-          ": exactIn: " +
+          ": contract: [" +
+          t3Payload.contractAddress +
+          "], exactIn: " +
           exactIn +
           ", native: " +
           native +
@@ -650,72 +665,69 @@ async function relayVaaToChain(
   }
 
   logger.info(
-    "relayVaaTo" + tcd.name + ": exactIn: " + exactIn + ", native: " + native
+    "relayVaaTo" +
+      tcd.name +
+      ": contract: [" +
+      t3Payload.contractAddress +
+      "], exactIn: " +
+      exactIn +
+      ", native: " +
+      native
   );
-  if (exactIn) {
-    if (native) {
-      await swap
-        .swapExactInFromVaaNative(tcd.contractWithSigner, signedVaaArray)
-        .then((receipt) => {
-          logger.info(
-            "relayVaaTo" + tcd.name + ": %o",
-            receipt.transactionHash
-          );
-        })
-        .catch((error) => {
-          logger.error(
-            "relayVaaTo" + tcd.name + ": transaction failed: %o",
-            error.transactionHash
-          );
-        });
+
+  try {
+    let receipt: any = null;
+    if (exactIn) {
+      if (native) {
+        receipt = await swap.swapExactInFromVaaNative(
+          tcd.contractWithSigner,
+          signedVaaArray
+        );
+      } else {
+        receipt = await swap.swapExactInFromVaaToken(
+          tcd.contractWithSigner,
+          signedVaaArray
+        );
+      }
     } else {
-      await swap
-        .swapExactInFromVaaToken(tcd.contractWithSigner, signedVaaArray)
-        .then((receipt) => {
-          logger.info(
-            "relayVaaTo" + tcd.name + ": %o",
-            receipt.transactionHash
-          );
-        })
-        .catch((error) => {
-          logger.error(
-            "relayVaaTo" + tcd.name + ": transaction failed: %o",
-            error.transactionHash
-          );
-        });
+      if (native) {
+        receipt = await swap.swapExactOutFromVaaNative(
+          tcd.contractWithSigner,
+          signedVaaArray
+        );
+      } else {
+        receipt = await swap.swapExactOutFromVaaToken(
+          tcd.contractWithSigner,
+          signedVaaArray
+        );
+      }
     }
-  } else {
-    if (native) {
-      await swap
-        .swapExactOutFromVaaNative(tcd.contractWithSigner, signedVaaArray)
-        .then((receipt) => {
-          logger.info(
-            "relayVaaTo" + tcd.name + ": %o",
-            receipt.transactionHash
-          );
-        })
-        .catch((error) => {
-          logger.error(
-            "relayVaaTo" + tcd.name + ": transaction failed: %o",
-            error.transactionHash
-          );
-        });
-    } else {
-      await swap
-        .swapExactOutFromVaaToken(tcd.contractWithSigner, signedVaaArray)
-        .then((receipt) => {
-          logger.info(
-            "relayVaaTo" + tcd.name + ": %o",
-            receipt.transactionHash
-          );
-        })
-        .catch((error) => {
-          logger.error(
-            "relayVaaTo" + tcd.name + ": transaction failed: %o",
-            error.transactionHash
-          );
-        });
-    }
+
+    logger.info(
+      "relayVaaTo" +
+        tcd.name +
+        ": contract: [" +
+        t3Payload.contractAddress +
+        "], exactIn: " +
+        exactIn +
+        ", native: " +
+        native +
+        " succeeded, txHash: " +
+        receipt.transactionHash
+    );
+  } catch (e: any) {
+    logger.error(
+      "relayVaaTo" +
+        tcd.name +
+        ": contract: [" +
+        t3Payload.contractAddress +
+        "], exactIn: " +
+        exactIn +
+        ", native: " +
+        native +
+        ": transaction failed: %o",
+      e
+    );
   }
 
   try {
@@ -737,7 +749,9 @@ async function relayVaaToChain(
     logger.info(
       "relayVaaTo" +
         tcd.name +
-        ": exactIn: " +
+        ": contract: [" +
+        t3Payload.contractAddress +
+        "], exactIn: " +
         exactIn +
         ", native: " +
         native +
