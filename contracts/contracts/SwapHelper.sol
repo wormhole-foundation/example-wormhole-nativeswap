@@ -5,9 +5,13 @@ import './IWormhole.sol';
 import 'solidity-bytes-utils/contracts/BytesLib.sol';
 
 
+/// @title Helper library for cross-chain swaps
+/// @notice Contains functions necessary for parsing encoded VAAs
+/// and structs containing swap parameters
 library SwapHelper {
     using BytesLib for bytes;
 
+    /// @dev Parameters needed for exactIn swap type
     struct ExactInParameters {
         uint256 amountIn;
         uint256 amountOutMinimum;
@@ -17,6 +21,7 @@ library SwapHelper {
         uint24 poolFee;
     }
 
+    /// @dev Parameters needed for exactOut swap type
     struct ExactOutParameters {
         uint256 amountOut;
         uint256 amountInMaximum;
@@ -26,6 +31,8 @@ library SwapHelper {
         uint24 poolFee;
     }
 
+    /// @dev Parameters parsed from a VAA for executing swaps
+    /// on the destination chain
     struct DecodedVaaParameters {
         // in order of decoding
         uint8 version;
@@ -41,6 +48,7 @@ library SwapHelper {
         uint8 swapCurrencyType;
     }
 
+    /// @dev Decodes parameters encoded in a VAA
     function decodeVaaPayload(
         IWormhole.VM memory encodedVm
     ) public view returns (DecodedVaaParameters memory decoded) {

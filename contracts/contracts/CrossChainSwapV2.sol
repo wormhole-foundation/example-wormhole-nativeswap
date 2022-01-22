@@ -32,7 +32,9 @@ interface IWETH is IERC20 {
 }
 
 
-/// @title A cross-chain UniswapV2 example 
+/// @title A cross-chain UniswapV2 example
+/// @notice Swaps against UniswapV2 pools and uses Wormhole TokenBridge
+/// for cross-chain transfers 
 contract CrossChainSwapV2 {
     using SafeERC20 for IERC20;
     using BytesLib for bytes;
@@ -58,6 +60,7 @@ contract CrossChainSwapV2 {
         wrappedNative = _wrappedNativeAddress;
     }
 
+    /// @dev Used to communicate information about executed swaps to UI/user
     event SwapResult(
         address indexed _recipient,
         address _tokenOut,
@@ -66,6 +69,8 @@ contract CrossChainSwapV2 {
         uint8 _success
     );
 
+    /// @dev Returns the parsed TokenBridge payload which contains swap 
+    /// instructions after redeeming the VAA from the TokenBridge
     function _getParsedPayload(
         bytes calldata encodedVaa,
         uint8 swapFunctionType,
@@ -88,7 +93,7 @@ contract CrossChainSwapV2 {
         // sanity check payload parameters
         require(
             payload.swapFunctionType==swapFunctionType, 
-            "swap must be type ExactIn"
+            "incorrect swapFunctionType in payload"
         ); 
         require(
             payload.swapCurrencyType==swapCurrencyType, 
@@ -96,6 +101,7 @@ contract CrossChainSwapV2 {
         ); 
     }    
 
+    /// @dev Executes exactIn native asset swap and pays the relayer
     function recvAndSwapExactNativeIn(
         bytes calldata encodedVaa
     ) external payable returns (uint256[] memory amounts) {
@@ -107,11 +113,17 @@ contract CrossChainSwapV2 {
                 typeNativeSwap
             );
 
-        // create dynamic address array - uniswap won't take fixed size array
+        // create dynamic address array 
+        // uniswap won't take fixed size array
         address[] memory uniPath = new address[](2);
         uniPath[0] = payload.path[0];
         uniPath[1] = payload.path[1];
-        require(uniPath[0]==feeTokenAddress, "tokenIn must be UST");
+
+        // sanity check path
+        require(
+            uniPath[0]==feeTokenAddress, 
+            "tokenIn must be UST"
+        );
         require(
             uniPath[1]==wrappedNative, 
             "tokenOut must be wrapped native asset"
@@ -121,9 +133,7 @@ contract CrossChainSwapV2 {
         // reflect payment in second swap amount
         IERC20 feeToken = IERC20(feeTokenAddress);
         feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 swapAmountLessFees = (
-            payload.swapAmount - payload.relayerFee
-        );
+        uint256 swapAmountLessFees = payload.swapAmount - payload.relayerFee;
 
         // approve the router to spend tokens
         TransferHelper.safeApprove(
@@ -173,6 +183,7 @@ contract CrossChainSwapV2 {
         }
     }
 
+    /// @dev Executes exactIn token swap and pays the relayer
     function recvAndSwapExactIn(
         bytes calldata encodedVaa
     ) external returns (uint256[] memory amounts) {
@@ -188,6 +199,8 @@ contract CrossChainSwapV2 {
         address[] memory uniPath = new address[](2);
         uniPath[0] = payload.path[0];
         uniPath[1] = payload.path[1];
+
+        // make sure first element in path is UST
         require(uniPath[0]==feeTokenAddress, "tokenIn must be UST");
 
         // pay relayer before attempting to do the swap
@@ -229,6 +242,7 @@ contract CrossChainSwapV2 {
                 payload.recipientAddress, 
                 swapAmountLessFees
             );
+
             // used in UI to tell user they're getting
             // UST instead of their desired token
             emit SwapResult(
@@ -241,6 +255,8 @@ contract CrossChainSwapV2 {
         }   
     }
 
+    /// @dev Executes exactIn native asset and token swaps before
+    /// sending a custom payload to the TokenBridge
     function _swapExactInBeforeTransfer(
         uint256 amountIn,
         uint256 amountOutMinimum,
@@ -266,6 +282,8 @@ contract CrossChainSwapV2 {
         amountOut = amounts[1];
     }
 
+    /// @dev Calls _swapExactInBeforeTransfer and encodes custom payload with 
+    /// instructions for executing token swaps on the destination chain
     function swapExactInAndTransfer(
         SwapHelper.ExactInParameters calldata swapParams,
         address[] calldata path,
@@ -283,7 +301,7 @@ contract CrossChainSwapV2 {
             "tokenOut must be UST for first swap"
         );
 
-        // send wrapped native asset to this contract
+        // send tokens to this contract
         IERC20 token = IERC20(path[0]);
         token.safeTransferFrom(msg.sender, address(this), swapParams.amountIn);
 
@@ -327,6 +345,8 @@ contract CrossChainSwapV2 {
         );
     }
 
+    /// @dev Calls _swapExactInBeforeTransfer and encodes custom payload with 
+    /// instructions for executing native asset swaps on the destination chain
     function swapExactNativeInAndTransfer(
         SwapHelper.ExactInParameters calldata swapParams,
         address[] calldata path,
@@ -356,7 +376,7 @@ contract CrossChainSwapV2 {
 
         // peform the first swap
         uint256 amountOut = _swapExactInBeforeTransfer(
-            msg.value, // native value sent in transaction is the amountIn 
+            msg.value, 
             swapParams.amountOutMinimum, 
             msg.sender,
             path[0:2],
@@ -394,6 +414,7 @@ contract CrossChainSwapV2 {
         );
     }
 
+    /// @dev Executes exactOut native asset swap and pays the relayer
     function recvAndSwapExactNativeOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
@@ -412,6 +433,8 @@ contract CrossChainSwapV2 {
         address[] memory uniPath = new address[](2);
         uniPath[0] = payload.path[0];
         uniPath[1] = payload.path[1];
+
+        // sanity check path
         require(
             uniPath[0]==feeTokenAddress, 
             "tokenIn must be UST"
@@ -463,7 +486,7 @@ contract CrossChainSwapV2 {
             payable(payload.recipientAddress).transfer(amounts[1]);
 
             // used in UI to tell user they're getting
-            // their desired token
+            // their desired native asset
             emit SwapResult(
                 payload.recipientAddress, 
                 uniPath[1], 
@@ -480,7 +503,7 @@ contract CrossChainSwapV2 {
             );
 
             // used in UI to tell user they're getting
-            // UST instead of their desired token
+            // UST instead of their desired native asset
             emit SwapResult(
                 payload.recipientAddress, 
                 uniPath[0], 
@@ -491,6 +514,7 @@ contract CrossChainSwapV2 {
         }
     }
 
+    /// @dev Executes exactOut token swap and pays the relayer
     function recvAndSwapExactOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
@@ -566,7 +590,7 @@ contract CrossChainSwapV2 {
             );
 
             // used in UI to tell user they're getting
-            // UST instead of their desired native asset
+            // UST instead of their desired token
             emit SwapResult(
                 payload.recipientAddress, 
                 uniPath[0], 
@@ -577,6 +601,8 @@ contract CrossChainSwapV2 {
         }
     }
 
+    /// @dev Executes exactOut native asset and token swaps before
+    /// sending a custom payload to the TokenBridge
     function _swapExactOutBeforeTransfer(
         uint256 amountOut,
         uint256 amountInMaximum,
@@ -584,15 +610,7 @@ contract CrossChainSwapV2 {
         address[] calldata path,
         uint256 deadline,
         uint8 swapType
-    ) public payable {
-        // path[0] is the tokenIn
-        IERC20 token = IERC20(path[0]);
-        token.safeTransferFrom(
-            contractCaller, 
-            address(this), 
-            amountInMaximum
-        );
-
+    ) internal {
         // approve the router to spend tokens
         TransferHelper.safeApprove(
             path[0], 
@@ -617,6 +635,7 @@ contract CrossChainSwapV2 {
             TransferHelper.safeApprove(path[0], address(swapRouter), 0);
             if (swapType == typeTokenSwap) {
                 // send remaining tokens to contractCaller
+                IERC20 token = IERC20(path[0]); 
                 token.safeTransfer(
                     contractCaller, 
                     amountInMaximum - amountInUsed
@@ -633,6 +652,8 @@ contract CrossChainSwapV2 {
         }
     }
 
+    /// @dev Calls _swapExactOutBeforeTransfer and encodes custom payload with 
+    /// instructions for executing token swaps on the destination chain
     function swapExactOutAndTransfer(
         SwapHelper.ExactOutParameters calldata swapParams,
         address[] calldata path,
@@ -648,6 +669,14 @@ contract CrossChainSwapV2 {
         require(
             path[1]==feeTokenAddress, 
             "tokenOut must be UST for first swap"
+        );
+
+        // send tokens to this contract before swap
+        IERC20 token = IERC20(path[0]);
+        token.safeTransferFrom(
+            msg.sender, 
+            address(this), 
+            swapParams.amountInMaximum
         );
 
         // peform the first swap
@@ -691,6 +720,8 @@ contract CrossChainSwapV2 {
         );
     } 
 
+    /// @dev Calls _swapExactOutBeforeTransfer and encodes custom payload with 
+    /// instructions for executing native asset swaps on the destination chain
     function swapExactNativeOutAndTransfer(
         SwapHelper.ExactOutParameters calldata swapParams,
         address[] calldata path,
@@ -721,7 +752,7 @@ contract CrossChainSwapV2 {
         // peform the first swap
         _swapExactOutBeforeTransfer(
             swapParams.amountOut, 
-            msg.value, // native value sent in transaction is the maximumAmountIn 
+            msg.value,  
             msg.sender,
             path[0:2], 
             swapParams.deadline,
@@ -759,6 +790,6 @@ contract CrossChainSwapV2 {
         );
     }
 
-    // we need to accept native assets sends for unwrapping 
+    // necessary for receiving native assets
     receive() external payable {}
 }
