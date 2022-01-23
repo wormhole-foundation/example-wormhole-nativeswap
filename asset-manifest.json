@@ -1,12 +1,12 @@
 {
   "files": {
     "main.css": "/wormhole-nativeswap-example/static/css/main.a55348bc.chunk.css",
-    "main.js": "/wormhole-nativeswap-example/static/js/main.2a8c773e.chunk.js",
-    "main.js.map": "/wormhole-nativeswap-example/static/js/main.2a8c773e.chunk.js.map",
+    "main.js": "/wormhole-nativeswap-example/static/js/main.6d2c5267.chunk.js",
+    "main.js.map": "/wormhole-nativeswap-example/static/js/main.6d2c5267.chunk.js.map",
     "runtime-main.js": "/wormhole-nativeswap-example/static/js/runtime-main.042f3d2b.js",
     "runtime-main.js.map": "/wormhole-nativeswap-example/static/js/runtime-main.042f3d2b.js.map",
-    "static/js/2.feccc19d.chunk.js": "/wormhole-nativeswap-example/static/js/2.feccc19d.chunk.js",
-    "static/js/2.feccc19d.chunk.js.map": "/wormhole-nativeswap-example/static/js/2.feccc19d.chunk.js.map",
+    "static/js/2.069fda70.chunk.js": "/wormhole-nativeswap-example/static/js/2.069fda70.chunk.js",
+    "static/js/2.069fda70.chunk.js.map": "/wormhole-nativeswap-example/static/js/2.069fda70.chunk.js.map",
     "static/js/3.568bae82.chunk.js": "/wormhole-nativeswap-example/static/js/3.568bae82.chunk.js",
     "static/js/3.568bae82.chunk.js.map": "/wormhole-nativeswap-example/static/js/3.568bae82.chunk.js.map",
     "static/js/4.6bf00d2c.chunk.js": "/wormhole-nativeswap-example/static/js/4.6bf00d2c.chunk.js",
@@ -29,15 +29,15 @@
     "static/js/10.0b02594e.chunk.js.map": "/wormhole-nativeswap-example/static/js/10.0b02594e.chunk.js.map",
     "index.html": "/wormhole-nativeswap-example/index.html",
     "static/css/main.a55348bc.chunk.css.map": "/wormhole-nativeswap-example/static/css/main.a55348bc.chunk.css.map",
-    "static/js/2.feccc19d.chunk.js.LICENSE.txt": "/wormhole-nativeswap-example/static/js/2.feccc19d.chunk.js.LICENSE.txt",
+    "static/js/2.069fda70.chunk.js.LICENSE.txt": "/wormhole-nativeswap-example/static/js/2.069fda70.chunk.js.LICENSE.txt",
     "static/media/eth.364436c5.svg": "/wormhole-nativeswap-example/static/media/eth.364436c5.svg",
     "static/media/polygon.97ff139c.svg": "/wormhole-nativeswap-example/static/media/polygon.97ff139c.svg",
     "static/media/wormhole-network.5bb90ed1.svg": "/wormhole-nativeswap-example/static/media/wormhole-network.5bb90ed1.svg"
   },
   "entrypoints": [
     "static/js/runtime-main.042f3d2b.js",
-    "static/js/2.feccc19d.chunk.js",
+    "static/js/2.069fda70.chunk.js",
     "static/css/main.a55348bc.chunk.css",
-    "static/js/main.2a8c773e.chunk.js"
+    "static/js/main.6d2c5267.chunk.js"
   ]
 }
