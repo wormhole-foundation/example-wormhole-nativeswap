@@ -17,7 +17,6 @@ export default async function getIsTransferCompletedEvmWithRetry(
         provider,
         signedVAA
       );
-      console.log("getIsTransferCompletedEth", result);
     } catch (e) {
       console.error(e);
     }

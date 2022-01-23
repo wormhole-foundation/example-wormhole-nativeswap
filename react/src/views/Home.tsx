@@ -1,4 +1,5 @@
 import {
+  Collapse,
   Container,
   Link,
   makeStyles,
@@ -33,6 +34,9 @@ import { Alert } from "@material-ui/lab";
 import parseError from "../utils/parseError";
 import Settings from "../components/Settings";
 import getIsTransferCompletedEvmWithRetry from "../utils/getIsTransferCompletedWithRetry";
+import CircleLoader from "../components/CircleLoader";
+import { ArrowForward, CheckCircleOutlineRounded } from "@material-ui/icons";
+import SwapProgress from "../components/SwapProgress";
 
 const useStyles = makeStyles((theme) => ({
   bg: {
@@ -115,6 +119,16 @@ const useStyles = makeStyles((theme) => ({
     margin: "1rem",
     display: "inline-block",
   },
+  loaderHolder: {
+    display: "flex",
+    justifyContent: "center",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  successIcon: {
+    color: COLORS.green,
+    fontSize: "200px",
+  },
 }));
 
 const switchProviderNetwork = async (
@@ -136,10 +150,11 @@ const switchProviderNetwork = async (
 
 export default function Home() {
   const classes = useStyles();
-  const [sourceTokenInfo, setSourceTokenInfo] = useState(WMATIC_TOKEN_INFO);
-  const [targetTokenInfo, setTargetTokenInfo] = useState(WETH_TOKEN_INFO);
+  const [sourceTokenInfo, setSourceTokenInfo] = useState(MATIC_TOKEN_INFO);
+  const [targetTokenInfo, setTargetTokenInfo] = useState(ETH_TOKEN_INFO);
   const [amountIn, setAmountIn] = useState("");
-  const [amountOut, setAmountOut] = useState("0.0");
+  const [amountInUST, setAmountInUST] = useState("");
+  const [amountOut, setAmountOut] = useState("");
   const [deadline, setDeadline] = useState("30");
   const [slippage, setSlippage] = useState("1");
   const [executor, setExecutor] = useState<UniswapToUniswapExecutor | null>(
@@ -150,18 +165,25 @@ export default function Home() {
   const [hasQuote, setHasQuote] = useState(false);
   const { provider, signer } = useEthereumProvider();
   const { enqueueSnackbar } = useSnackbar();
+  const [isFirstSwapComplete, setIsFirstSwapComplete] = useState(false);
+  const [isSecondSwapComplete, setIsSecondSwapComplete] = useState(false);
+  const [sourceTxBlockNumber, setSourceTxBlockNumber] = useState<
+    number | undefined
+  >(undefined);
+  const [hasSignedVAA, setHasSignedVAA] = useState(false);
+  const [relayerTimeoutString, setRelayerTimeoutString] = useState("");
 
   const computeQuote = useCallback(() => {
     (async () => {
       setHasQuote(false);
       setIsComputingQuote(true);
+      setAmountOut("");
       try {
         if (
           parseFloat(amountIn) > 0 &&
           !isNaN(parseFloat(deadline)) &&
           !isNaN(parseFloat(slippage))
         ) {
-          setAmountOut("0.0");
           const executor = new UniswapToUniswapExecutor();
           await executor.initialize(
             sourceTokenInfo.address,
@@ -184,9 +206,12 @@ export default function Home() {
               executor.tokens.dstOut.formatAmount(quote.dst.minAmountOut)
             ).toFixed(8)
           );
+          setAmountInUST(
+            parseFloat(
+              executor.tokens.dstIn.formatAmount(quote.dst.amountIn)
+            ).toFixed(2)
+          );
           setHasQuote(true);
-        } else {
-          setAmountOut("0.0");
         }
       } catch (e) {
         console.error(e);
@@ -246,13 +271,28 @@ export default function Home() {
       setTargetTokenInfo(ETH_TOKEN_INFO);
     }
     setAmountIn("");
-    setAmountOut("0.0");
+    setAmountOut("");
+  }, []);
+
+  const reset = useCallback(() => {
+    setIsSwapping(false);
+    setHasQuote(false);
+    setIsFirstSwapComplete(false);
+    setIsSecondSwapComplete(false);
+    setAmountIn("");
+    setAmountOut("");
+    setSourceTxBlockNumber(undefined);
+    setRelayerTimeoutString("");
   }, []);
 
   const handleSwapClick = useCallback(async () => {
     if (provider && signer && executor) {
       try {
         setIsSwapping(true);
+        setIsFirstSwapComplete(false);
+        setHasSignedVAA(false);
+        setIsSecondSwapComplete(false);
+        setRelayerTimeoutString("");
         await switchProviderNetwork(provider, sourceTokenInfo.chainId);
 
         const sourceReceipt = await executor.approveAndSwap(signer);
@@ -260,24 +300,17 @@ export default function Home() {
           "firstSwapTransactionHash:",
           sourceReceipt.transactionHash
         );
+        setIsFirstSwapComplete(true);
+        setSourceTxBlockNumber(sourceReceipt.blockNumber);
 
         // Wait for the guardian network to reach consensus and emit the signedVAA
-        enqueueSnackbar(null, {
-          content: <Alert severity="info">Fetching VAA</Alert>,
-        });
         const { vaaBytes } = await getSignedVAAWithRetry(
           WORMHOLE_RPC_HOSTS,
           executor.srcExecutionParams.wormhole.chainId,
           executor.vaaSearchParams.emitterAddress,
           executor.vaaSearchParams.sequence
         );
-        enqueueSnackbar(null, {
-          content: (
-            <Alert severity="info">
-              Fetched the Signed VAA, waiting for relayer to redeem it
-            </Alert>
-          ),
-        });
+        setHasSignedVAA(true);
         //  Check if the signedVAA has redeemed by the relayer
         const isCompleted = await getIsTransferCompletedEvmWithRetry(
           executor.dstExecutionParams.wormhole.tokenBridgeAddress,
@@ -287,30 +320,26 @@ export default function Home() {
           3000,
           40
         );
-        if (isCompleted) {
-          enqueueSnackbar(null, {
-            content: <Alert severity="success">Swap completed</Alert>,
-          });
-        } else {
+        if (!isCompleted) {
           // If the relayer hasn't redeemed the signedVAA, then manually redeem it ourselves
+          setRelayerTimeoutString(
+            "Timed out waiting for relayer to complete swap. You'll need to complete it yourself."
+          );
           await switchProviderNetwork(provider, targetTokenInfo.chainId);
           const targetReceipt = await executor.fetchVaaAndSwap(signer);
-          enqueueSnackbar(null, {
-            content: <Alert severity="success">Swap completed</Alert>,
-          });
           console.info(
             "secondSwapTransactionHash:",
             targetReceipt.transactionHash
           );
         }
+        setIsSecondSwapComplete(true);
       } catch (e: any) {
+        reset();
         console.error(e);
         enqueueSnackbar(null, {
           content: <Alert severity="error">{parseError(e)}</Alert>,
         });
       }
-      setIsSwapping(false);
-      setAmountIn("");
     }
   }, [
     provider,
@@ -319,6 +348,7 @@ export default function Home() {
     enqueueSnackbar,
     sourceTokenInfo,
     targetTokenInfo,
+    reset,
   ]);
 
   const readyToSwap = provider && signer && hasQuote;
@@ -328,58 +358,103 @@ export default function Home() {
       <Container className={classes.centeredContainer} maxWidth="sm">
         <div className={classes.titleBar}></div>
         <Typography variant="h4" color="textSecondary">
-          Cross Chain Swap Demo
+          Wormhole NativeSwap Demo
         </Typography>
         <div className={classes.spacer} />
         <Paper className={classes.mainPaper}>
-          <Settings
-            disabled={isSwapping || isComputingQuote}
-            slippage={slippage}
-            deadline={deadline}
-            onSlippageChange={handleSlippageChange}
-            onDeadlineChange={handleDeadlineChange}
-          />
-          <TokenSelect
-            tokens={TOKEN_INFOS}
-            value={sourceTokenInfo.name}
-            onChange={handleSourceChange}
-            disabled={isSwapping || isComputingQuote}
-          ></TokenSelect>
-          <Typography variant="subtitle1">Send</Typography>
-          <TextField
-            type="number"
-            value={amountIn}
-            disabled={isSwapping || isComputingQuote}
-            InputProps={{ disableUnderline: true }}
-            className={classes.numberField}
-            onChange={handleAmountChange}
-            placeholder="0.0"
-          ></TextField>
+          <Collapse in={!isFirstSwapComplete}>
+            <Settings
+              disabled={isSwapping || isComputingQuote}
+              slippage={slippage}
+              deadline={deadline}
+              onSlippageChange={handleSlippageChange}
+              onDeadlineChange={handleDeadlineChange}
+            />
+            <TokenSelect
+              tokens={TOKEN_INFOS}
+              value={sourceTokenInfo.name}
+              onChange={handleSourceChange}
+              disabled={isSwapping || isComputingQuote}
+            ></TokenSelect>
+            <Typography variant="subtitle1">Send</Typography>
+            <TextField
+              type="number"
+              value={amountIn}
+              disabled={isSwapping || isComputingQuote}
+              InputProps={{ disableUnderline: true }}
+              className={classes.numberField}
+              onChange={handleAmountChange}
+              placeholder="0.0"
+            ></TextField>
+            <div className={classes.spacer} />
+            <TokenSelect
+              tokens={TOKEN_INFOS}
+              value={targetTokenInfo.name}
+              onChange={() => {}}
+              disabled={true}
+            ></TokenSelect>
+            <Typography variant="subtitle1">Receive (estimated)</Typography>
+            <TextField
+              type="number"
+              value={amountOut}
+              autoFocus={true}
+              InputProps={{ disableUnderline: true }}
+              className={classes.numberField}
+              inputProps={{ readOnly: true }}
+              placeholder="0.0"
+            ></TextField>
+            <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
+            {!isSwapping && <EthereumSignerKey />}
+            <ButtonWithLoader
+              disabled={!readyToSwap || isSwapping}
+              showLoader={isSwapping}
+              onClick={handleSwapClick}
+            >
+              Swap
+            </ButtonWithLoader>
+          </Collapse>
+          <Collapse in={isFirstSwapComplete && !isSecondSwapComplete}>
+            <div className={classes.loaderHolder}>
+              <CircleLoader />
+              <div className={classes.spacer} />
+              <Typography variant="h5">
+                {`Your ${sourceTokenInfo.name} is being swapped to ${targetTokenInfo.name}`}
+              </Typography>
+            </div>
+          </Collapse>
+          <Collapse in={isSecondSwapComplete}>
+            <div className={classes.loaderHolder}>
+              <CheckCircleOutlineRounded
+                className={classes.successIcon}
+                fontSize={"inherit"}
+              />
+              <Typography>Swap completed!</Typography>
+              <ButtonWithLoader onClick={() => reset()}>
+                Swap more tokens!
+              </ButtonWithLoader>
+            </div>
+          </Collapse>
           <div className={classes.spacer} />
-          <TokenSelect
-            tokens={TOKEN_INFOS}
-            value={targetTokenInfo.name}
-            onChange={() => {}}
-            disabled={true}
-          ></TokenSelect>
-          <Typography variant="subtitle1">Receive (estimated)</Typography>
-          <TextField
-            type="number"
-            value={amountOut}
-            autoFocus={true}
-            InputProps={{ disableUnderline: true }}
-            className={classes.numberField}
-            inputProps={{ readOnly: true }}
-          ></TextField>
-          <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
-          {!isSwapping && <EthereumSignerKey />}
-          <ButtonWithLoader
-            disabled={!readyToSwap || isSwapping}
-            showLoader={isSwapping}
-            onClick={handleSwapClick}
-          >
-            Swap
-          </ButtonWithLoader>
+          {hasQuote && (
+            <Typography variant="subtitle1">
+              {`${amountIn} ${sourceTokenInfo.name} `}
+              <ArrowForward fontSize="inherit" />
+              {` ${amountInUST} UST `} <ArrowForward fontSize="inherit" />
+              {` ${amountOut} ${targetTokenInfo.name}`}
+            </Typography>
+          )}
+          {isFirstSwapComplete &&
+            !isSecondSwapComplete &&
+            !relayerTimeoutString && (
+              <SwapProgress
+                chainId={sourceTokenInfo.chainId}
+                txBlockNumber={sourceTxBlockNumber}
+                step={!hasSignedVAA ? 1 : !isSecondSwapComplete ? 2 : 3}
+              />
+            )}
+          {relayerTimeoutString && (
+            <Typography variant="subtitle1">{relayerTimeoutString}</Typography>
+          )}
           <div className={classes.spacer} />
           <Typography variant="subtitle2" color="error">
             WARNING: this is a Testnet release only
