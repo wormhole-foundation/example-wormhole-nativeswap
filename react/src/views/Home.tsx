@@ -448,10 +448,11 @@ export default function Home() {
           <div className={classes.spacer} />
           {hasQuote && (
             <Typography variant="subtitle1" className={classes.swapPath}>
-              {`${amountIn} ${sourceTokenInfo.name} `}
-              <ArrowForward fontSize="inherit" />
-              {` ${amountInUST} UST `} <ArrowForward fontSize="inherit" />
-              {` ${amountOut} ${targetTokenInfo.name}`}
+              {`${amountIn} ${sourceTokenInfo.name}`}
+              <ArrowForward fontSize="inherit" style={{ margin: "10px" }} />
+              {`${amountInUST} UST `}
+              <ArrowForward fontSize="inherit" style={{ margin: "10px" }} />
+              {`${amountOut} ${targetTokenInfo.name}`}
             </Typography>
           )}
           {isFirstSwapComplete &&
