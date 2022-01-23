@@ -623,45 +623,30 @@ async function relayVaaToChain(
   exactIn: boolean,
   native: boolean
 ) {
-  try {
-    logger.debug(
+  logger.debug(
+    "relayVaaTo" +
+      tcd.name +
+      ": checking if already redeemed on " +
+      tcd.name +
+      " using tokenBridgeAddress [" +
+      tcd.tokenBridgeAddress +
+      "]"
+  );
+
+  if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
+    logger.info(
       "relayVaaTo" +
         tcd.name +
-        ": checking if already redeemed on " +
-        tcd.name +
-        " using tokenBridgeAddress [" +
-        tcd.tokenBridgeAddress +
-        "]"
+        ": contract: [" +
+        t3Payload.contractAddress +
+        "], exactIn: " +
+        exactIn +
+        ", native: " +
+        native +
+        ": already transferred"
     );
 
-    const alreadyRedeemed = await getIsTransferCompletedEth(
-      tcd.tokenBridgeAddress,
-      tcd.provider,
-      signedVaaArray
-    );
-
-    if (alreadyRedeemed) {
-      logger.info(
-        "relayVaaTo" +
-          tcd.name +
-          ": contract: [" +
-          t3Payload.contractAddress +
-          "], exactIn: " +
-          exactIn +
-          ", native: " +
-          native +
-          ": already transferred!"
-      );
-
-      return;
-    }
-  } catch (e) {
-    logger.error(
-      "relayVaaTo" +
-        tcd.name +
-        ": failed to check if transfer is already complete, will attempt the transfer, e: %o",
-      e
-    );
+    return;
   }
 
   logger.info(
@@ -672,7 +657,8 @@ async function relayVaaToChain(
       "], exactIn: " +
       exactIn +
       ", native: " +
-      native
+      native +
+      ": submitting redeem request"
   );
 
   try {
@@ -712,10 +698,26 @@ async function relayVaaToChain(
         exactIn +
         ", native: " +
         native +
-        " succeeded, txHash: " +
+        ": success, txHash: " +
         receipt.transactionHash
     );
   } catch (e: any) {
+    if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
+      logger.info(
+        "relayVaaTo" +
+          tcd.name +
+          ": contract: [" +
+          t3Payload.contractAddress +
+          "], exactIn: " +
+          exactIn +
+          ", native: " +
+          native +
+          ": relay failed because the vaa has already been redeemed"
+      );
+
+      return;
+    }
+
     logger.error(
       "relayVaaTo" +
         tcd.name +
@@ -730,22 +732,7 @@ async function relayVaaToChain(
     );
   }
 
-  try {
-    logger.debug(
-      "relayVaaTo" +
-        tcd.name +
-        ": checking if redeemed on " +
-        tcd.name +
-        " using tokenBridgeAddress [" +
-        tcd.tokenBridgeAddress +
-        "]"
-    );
-    const redeemed = await getIsTransferCompletedEth(
-      tcd.tokenBridgeAddress,
-      tcd.provider,
-      signedVaaArray
-    );
-
+  if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
     logger.info(
       "relayVaaTo" +
         tcd.name +
@@ -755,17 +742,45 @@ async function relayVaaToChain(
         exactIn +
         ", native: " +
         native +
-        ": redeemed: " +
-        redeemed
+        ": redeem succeeded"
+    );
+  } else {
+    logger.error(
+      "relayVaaTo" +
+        tcd.name +
+        ": contract: [" +
+        t3Payload.contractAddress +
+        "], exactIn: " +
+        exactIn +
+        ", native: " +
+        native +
+        ": redeem failed!"
+    );
+  }
+}
+
+async function isRedeemed(
+  t3Payload: Type3Payload,
+  tcd: TargetContractData,
+  signedVaaArray: Uint8Array
+): Promise<boolean> {
+  let redeemed: boolean = false;
+  try {
+    redeemed = await getIsTransferCompletedEth(
+      tcd.tokenBridgeAddress,
+      tcd.provider,
+      signedVaaArray
     );
   } catch (e) {
     logger.error(
       "relayVaaTo" +
         tcd.name +
-        ": failed to check if transfer completed, e: %o",
+        ": failed to check if transfer is already complete, will attempt the transfer, e: %o",
       e
     );
   }
+
+  return redeemed;
 }
 
 ///////////////////////////////// Start of logger stuff ///////////////////////////////////////////
