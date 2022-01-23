@@ -385,7 +385,7 @@ export default function Home() {
             <TextField
               type="number"
               value={amountIn}
-              disabled={isSwapping || isComputingQuote}
+              disabled={isSwapping || isComputingQuote || parseFloat(amountIn) > sourceTokenInfo.maxAmount}
               InputProps={{ disableUnderline: true }}
               className={classes.numberField}
               onChange={handleAmountChange}
