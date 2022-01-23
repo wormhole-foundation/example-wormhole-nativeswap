@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache 2
+
 pragma solidity ^0.7.6;
 pragma abicoder v2;
 
