@@ -129,6 +129,10 @@ const useStyles = makeStyles((theme) => ({
     color: COLORS.green,
     fontSize: "200px",
   },
+  swapPath: {
+    display: "inline-flex",
+    alignItems: "center",
+  },
 }));
 
 const switchProviderNetwork = async (
@@ -178,6 +182,7 @@ export default function Home() {
       setHasQuote(false);
       setIsComputingQuote(true);
       setAmountOut("");
+      setAmountInUST("");
       try {
         if (
           parseFloat(amountIn) > 0 &&
@@ -386,6 +391,12 @@ export default function Home() {
               onChange={handleAmountChange}
               placeholder="0.0"
             ></TextField>
+            {parseFloat(amountIn) > sourceTokenInfo.maxAmount ? (
+              <Typography
+                variant="subtitle2"
+                color="error"
+              >{`The max input amount is ${sourceTokenInfo.maxAmount} ${sourceTokenInfo.name}`}</Typography>
+            ) : null}
             <div className={classes.spacer} />
             <TokenSelect
               tokens={TOKEN_INFOS}
@@ -436,7 +447,7 @@ export default function Home() {
           </Collapse>
           <div className={classes.spacer} />
           {hasQuote && (
-            <Typography variant="subtitle1">
+            <Typography variant="subtitle1" className={classes.swapPath}>
               {`${amountIn} ${sourceTokenInfo.name} `}
               <ArrowForward fontSize="inherit" />
               {` ${amountInUST} UST `} <ArrowForward fontSize="inherit" />

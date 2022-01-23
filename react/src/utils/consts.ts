@@ -12,6 +12,7 @@ export interface TokenInfo {
   chainId: ChainId;
   logo: string;
   isNative: boolean;
+  maxAmount: number;
 }
 
 export const MATIC_TOKEN_INFO: TokenInfo = {
@@ -20,6 +21,7 @@ export const MATIC_TOKEN_INFO: TokenInfo = {
   chainId: CHAIN_ID_POLYGON,
   logo: polygonIcon,
   isNative: true,
+  maxAmount: 0.1,
 };
 
 export const WMATIC_TOKEN_INFO: TokenInfo = {
@@ -28,6 +30,7 @@ export const WMATIC_TOKEN_INFO: TokenInfo = {
   chainId: CHAIN_ID_POLYGON,
   logo: polygonIcon,
   isNative: false,
+  maxAmount: 0.1,
 };
 
 export const ETH_TOKEN_INFO: TokenInfo = {
@@ -36,6 +39,7 @@ export const ETH_TOKEN_INFO: TokenInfo = {
   chainId: CHAIN_ID_ETH,
   logo: ethIcon,
   isNative: true,
+  maxAmount: 0.01,
 };
 
 export const WETH_TOKEN_INFO: TokenInfo = {
@@ -44,6 +48,7 @@ export const WETH_TOKEN_INFO: TokenInfo = {
   chainId: CHAIN_ID_ETH,
   logo: ethIcon,
   isNative: false,
+  maxAmount: 0.01,
 };
 
 export const TOKEN_INFOS = [
