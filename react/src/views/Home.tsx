@@ -24,7 +24,6 @@ import {
   WORMHOLE_RPC_HOSTS,
 } from "../utils/consts";
 import { COLORS } from "../muiTheme";
-import Wormhole from "../icons/wormhole-network.svg";
 import { UniswapToUniswapExecutor } from "../swapper/swapper";
 import { Web3Provider } from "@ethersproject/providers";
 import { hexlify, hexStripZeros } from "ethers/lib/utils";
@@ -37,6 +36,7 @@ import getIsTransferCompletedEvmWithRetry from "../utils/getIsTransferCompletedW
 import CircleLoader from "../components/CircleLoader";
 import { ArrowForward, CheckCircleOutlineRounded } from "@material-ui/icons";
 import SwapProgress from "../components/SwapProgress";
+import Footer from "../components/Footer";
 
 const useStyles = makeStyles((theme) => ({
   bg: {
@@ -415,9 +415,14 @@ export default function Home() {
               placeholder="0.0"
             ></TextField>
             <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
+            <Typography variant="subtitle2">{`Relayer fee: ${RELAYER_FEE_UST} UST`}</Typography>
             {!isSwapping && <EthereumSignerKey />}
             <ButtonWithLoader
-              disabled={!readyToSwap || isSwapping || parseFloat(amountIn) > sourceTokenInfo.maxAmount}
+              disabled={
+                !readyToSwap ||
+                isSwapping ||
+                parseFloat(amountIn) > sourceTokenInfo.maxAmount
+              }
               showLoader={isSwapping}
               onClick={handleSwapClick}
             >
@@ -473,23 +478,22 @@ export default function Home() {
           </Typography>
         </Paper>
         <div className={classes.spacer} />
-        <Typography variant="subtitle1" color="textSecondary">
-          <Link variant="subtitle2" href="https://wormholenetwork.com/">
-            powered by wormhole
-          </Link>
-        </Typography>
-        <img src={Wormhole} alt="Wormhole" className={classes.wormholeIcon} />
-        <div className={classes.spacer} />
-        <Link variant="subtitle2" href="https://github.com/certusone/wormhole-nativeswap-example/">
-          Repo
-        </Link>
-        <div />
-        <div className={classes.spacer} />
-        <Link variant="subtitle2" href="https://goerli-faucet.slock.it/">
+        <Footer />
+        <Link href="https://goerli-faucet.slock.it/" style={{ margin: "5px" }}>
           Goerli faucet
         </Link>
-        <div />
-        <Link href="https://faucet.polygon.technology/">Mumbai faucet</Link>
+        <Link
+          href="https://faucet.polygon.technology/"
+          style={{ margin: "5px" }}
+        >
+          Mumbai faucet
+        </Link>
+        <Link
+          href="https://github.com/certusone/wormhole-nativeswap-example/"
+          style={{ margin: "5px" }}
+        >
+          NativeSwap GitHub
+        </Link>
       </Container>
     </div>
   );
