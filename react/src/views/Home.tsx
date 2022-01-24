@@ -474,9 +474,16 @@ export default function Home() {
         </Paper>
         <div className={classes.spacer} />
         <Typography variant="subtitle1" color="textSecondary">
-          {"powered by wormhole"}
+          <Link variant="subtitle2" href="https://wormholenetwork.com/">
+            powered by wormhole
+          </Link>
         </Typography>
         <img src={Wormhole} alt="Wormhole" className={classes.wormholeIcon} />
+        <div className={classes.spacer} />
+        <Link variant="subtitle2" href="https://github.com/certusone/wormhole-nativeswap-example/">
+          Repo
+        </Link>
+        <div />
         <div className={classes.spacer} />
         <Link variant="subtitle2" href="https://goerli-faucet.slock.it/">
           Goerli faucet
