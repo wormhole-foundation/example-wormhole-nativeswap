@@ -385,7 +385,7 @@ export default function Home() {
             <TextField
               type="number"
               value={amountIn}
-              disabled={isSwapping || isComputingQuote || parseFloat(amountIn) > sourceTokenInfo.maxAmount}
+              disabled={isSwapping || isComputingQuote}
               InputProps={{ disableUnderline: true }}
               className={classes.numberField}
               onChange={handleAmountChange}
@@ -417,7 +417,7 @@ export default function Home() {
             <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
             {!isSwapping && <EthereumSignerKey />}
             <ButtonWithLoader
-              disabled={!readyToSwap || isSwapping}
+              disabled={!readyToSwap || isSwapping || parseFloat(amountIn) > sourceTokenInfo.maxAmount}
               showLoader={isSwapping}
               onClick={handleSwapClick}
             >
