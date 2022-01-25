@@ -25,14 +25,20 @@ import {
 
 import { ethers } from "ethers";
 
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../../react/src/addresses/goerli";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../../react/src/addresses/mumbai";
 import { abi as SWAP_CONTRACT_V2_ABI } from "../../react/src/abi/contracts/CrossChainSwapV2.json";
 import { abi as SWAP_CONTRACT_V3_ABI } from "../../react/src/abi/contracts/CrossChainSwapV3.json";
 
 import * as swap from "../../react/src/swapper/util";
 
-let logger: any;
+import { isEvmContract, makeEvmContractData, relayVaaToEvm } from "./evm";
+
+import {
+  isTerraContract,
+  makeTerraContractData,
+  relayVaaToTerra,
+} from "./terra";
+
+export let logger: any;
 
 let configFile: string = ".env";
 if (process.env.SWAP_RELAY_CONFIG) {
@@ -44,19 +50,31 @@ require("dotenv").config({ path: configFile });
 
 initLogger();
 
-type OurEnvironment = {
+export type OurEnvironment = {
   spy_host: string;
   spy_filters: string;
+
   eth_provider_url: string;
-  polygon_provider_url: string;
-  wallet_private_key: string;
   eth_contract_address: string;
-  polygon_contract_address: string;
   eth_token_bridge_address: string;
+
+  polygon_provider_url: string;
+  polygon_contract_address: string;
   polygon_token_bridge_address: string;
+
+  evm_wallet_private_key: string;
+
+  terraEnabled: boolean;
+  terra_provider_url: string;
+  terra_chain_id: string;
+  terra_name: string;
+  terra_contract_address: string;
+  terra_token_bridge_address: string;
+  terra_wallet_private_key: string;
+  terra_gas_price_url: string;
 };
 
-type TargetContractData = {
+type EvmContractData = {
   name: string;
   contractAddress: string;
   tokenBridgeAddress: string;
@@ -66,7 +84,8 @@ type TargetContractData = {
   contractWithSigner: ethers.Contract;
 };
 
-type Type3Payload = {
+export type Type3Payload = {
+  targetChainId: number;
   contractAddress: string;
   relayerFee: ethers.BigNumber;
   swapFunctionType: number;
@@ -85,8 +104,6 @@ let success: boolean;
 let env: OurEnvironment;
 [success, env] = loadConfig();
 
-let ethContractData: TargetContractData = null;
-let polygonContractData: TargetContractData = null;
 let seqMap = new Map<string, number>();
 
 const mutex = new Mutex();
@@ -101,8 +118,10 @@ if (success) {
   );
 
   try {
-    ethContractData = makeEthContractData();
-    polygonContractData = makePolygonContractData();
+    makeEvmContractData(env);
+    if (env.terraEnabled) {
+      makeTerraContractData(env);
+    }
   } catch (e: any) {
     logger.error("failed to connect to target contracts: %o", e);
     success = false;
@@ -119,20 +138,26 @@ function loadConfig(): [boolean, OurEnvironment] {
     logger.error("Missing environment variable SPY_SERVICE_HOST");
     return [false, undefined];
   }
+
   if (!process.env.ETH_PROVIDER) {
     logger.error("Missing environment variable ETH_PROVIDER");
     return [false, undefined];
   }
-  if (!process.env.POLYGON_PROVIDER) {
-    logger.error("Missing environment variable POLYGON_PROVIDER");
-    return [false, undefined];
-  }
-  if (!process.env.WALLET_PRIVATE_KEY) {
-    logger.error("Missing environment variable WALLET_PRIVATE_KEY");
+  if (!process.env.ETH_CONTRACT_ADDRESS) {
+    logger.error("Missing environment variable ETH_CONTRACT_ADDRESS");
     return [false, undefined];
   }
   if (!process.env.ETH_TOKEN_BRIDGE_ADDRESS) {
     logger.error("Missing environment variable ETH_TOKEN_BRIDGE_ADDRESS");
+    return [false, undefined];
+  }
+
+  if (!process.env.POLYGON_PROVIDER) {
+    logger.error("Missing environment variable POLYGON_PROVIDER");
+    return [false, undefined];
+  }
+  if (!process.env.POLYGON_CONTRACT_ADDRESS) {
+    logger.error("Missing environment variable POLYGON_CONTRACT_ADDRESS");
     return [false, undefined];
   }
   if (!process.env.POLYGON_TOKEN_BRIDGE_ADDRESS) {
@@ -140,18 +165,72 @@ function loadConfig(): [boolean, OurEnvironment] {
     return [false, undefined];
   }
 
+  if (!process.env.WALLET_PRIVATE_KEY) {
+    logger.error("Missing environment variable WALLET_PRIVATE_KEY");
+    return [false, undefined];
+  }
+
+  let terraEnabled: boolean = false;
+  if (process.env.TERRA_PROVIDER) {
+    terraEnabled = true;
+
+    if (!process.env.TERRA_CHAIN_ID) {
+      logger.error("Missing environment variable WALLET_PRIVATE_KEY");
+      return [false, undefined];
+      throw "Missing environment variable TERRA_CHAIN_ID";
+    }
+
+    if (!process.env.TERRA_NAME) {
+      logger.error("Missing environment variable WALLET_PRIVATE_KEY");
+      return [false, undefined];
+      throw "Missing environment variable TERRA_NAME";
+    }
+
+    if (!process.env.TERRA_WALLET_PRIVATE_KEY) {
+      logger.error("Missing environment variable TERRA_WALLET_PRIVATE_KEY");
+      return [false, undefined];
+    }
+
+    if (!process.env.TERRA_GAS_PRICE_URL) {
+      logger.error("Missing environment variable TERRA_GAS_PRICE_URL");
+      return [false, undefined];
+    }
+
+    if (!process.env.TERRA_CONTRACT_ADDRESS) {
+      logger.error("Missing environment variable TERRA_CONTRACT_ADDRESS");
+      return [false, undefined];
+    }
+
+    if (!process.env.TERRA_TOKEN_BRIDGE_ADDRESS) {
+      logger.error("Missing environment variable TERRA_TOKEN_BRIDGE_ADDRESS");
+      return [false, undefined];
+    }
+  }
+
   return [
     true,
     {
       spy_host: process.env.SPY_SERVICE_HOST,
       spy_filters: process.env.SPY_SERVICE_FILTERS,
+
       eth_provider_url: process.env.ETH_PROVIDER,
-      polygon_provider_url: process.env.POLYGON_PROVIDER,
-      wallet_private_key: process.env.WALLET_PRIVATE_KEY,
       eth_contract_address: process.env.ETH_CONTRACT_ADDRESS,
-      polygon_contract_address: process.env.POLYGON_CONTRACT_ADDRESS,
       eth_token_bridge_address: process.env.ETH_TOKEN_BRIDGE_ADDRESS,
+
+      polygon_provider_url: process.env.POLYGON_PROVIDER,
+      polygon_contract_address: process.env.POLYGON_CONTRACT_ADDRESS,
       polygon_token_bridge_address: process.env.POLYGON_TOKEN_BRIDGE_ADDRESS,
+
+      evm_wallet_private_key: process.env.WALLET_PRIVATE_KEY,
+
+      terraEnabled: terraEnabled,
+      terra_provider_url: process.env.TERRA_PROVIDER,
+      terra_chain_id: process.env.TERRA_CHAIN_ID,
+      terra_name: process.env.TERRA_NAME,
+      terra_contract_address: process.env.TERRA_CONTRACT_ADDRESS,
+      terra_token_bridge_address: process.env.TERRA_TOKEN_BRIDGE_ADDRESS,
+      terra_wallet_private_key: process.env.TERRA_WALLET_PRIVATE_KEY,
+      terra_gas_price_url: process.env.TERRA_GAS_PRICE_URL,
     },
   ];
 }
@@ -245,9 +324,14 @@ async function processVaa(vaaBytes: string) {
 
   seqMap.set(seqNumKey, parsedVAA.sequence);
 
-  let payload_type: number = parsedVAA.payload[0];
+  let t3Payload: Type3Payload = null;
+  try {
+    t3Payload = decodeSignedVAAPayloadType3(parsedVAA);
+  } catch (e) {
+    logger.error("failed to parse type 3 vaa: %o", e);
+    return;
+  }
 
-  let t3Payload = decodeSignedVAAPayloadType3(parsedVAA);
   if (t3Payload) {
     if (isOurContract(t3Payload.contractAddress)) {
       logger.info(
@@ -297,31 +381,71 @@ async function processVaa(vaaBytes: string) {
         "], seqNum: " +
         parsedVAA.sequence +
         " payloadType: " +
-        payload_type
+        parsedVAA.payload[0]
     );
   }
 }
 
 function decodeSignedVAAPayloadType3(parsedVAA: any): Type3Payload {
   const payload = Buffer.from(new Uint8Array(parsedVAA.payload));
-  const version = payload.readUInt8(0);
+  if (payload[0] !== 3) return undefined;
 
-  if (version !== 3) {
+  logger.info("decodeSignedVAAPayloadType3: length: " + payload.length);
+  if (payload.length < 101) {
+    logger.error(
+      "decodeSignedVAAPayloadType3: dropping type 3 vaa because the payload is too short to determine the target chain id, length: " +
+        payload.length
+    );
     return undefined;
   }
+
+  const targetChainId = payload.readUInt16BE(99);
+  logger.info("decodeSignedVAAPayloadType3: target ChainId: " + targetChainId);
+
+  let contractAddress: string = "";
+  let swapFunctionType: number = 0;
+  let swapCurrencyType: number = 0;
+
+  if (targetChainId === 3) {
+    logger.info(
+      "decodeSignedVAAPayloadType3: terraContractAddr: [" +
+        payload.slice(67, 67 + 32).toString("hex") +
+        "]"
+    );
+    logger.info(
+      "decodeSignedVAAPayloadType3: terraContractAddr: [" +
+        payload.slice(67, 67 + 32).toString() +
+        "]"
+    );
+
+    contractAddress = payload.slice(67, 67 + 32).toString("hex");
+  } else {
+    if (payload.length < 262) {
+      logger.error(
+        "decodeSignedVAAPayloadType3: dropping type 3 vaa because the payload is too short to extract the contract fields, length: " +
+          payload.length +
+          ", target chain id: " +
+          targetChainId
+      );
+      return undefined;
+    }
+
+    contractAddress = payload.slice(79, 79 + 20).toString("hex");
+    swapFunctionType = payload.readUInt8(260);
+    swapCurrencyType = payload.readUInt8(261);
+  }
+
   return {
+    targetChainId: targetChainId,
     contractAddress: payload.slice(79, 79 + 20).toString("hex"),
     relayerFee: ethers.BigNumber.from(payload.slice(101, 101 + 32)),
-    swapFunctionType: payload.readUInt8(260),
-    swapCurrencyType: payload.readUInt8(261),
+    swapFunctionType: swapFunctionType,
+    swapCurrencyType: swapCurrencyType,
   };
 }
 
 function isOurContract(contractAddress: string): boolean {
-  return (
-    contractAddress === ethContractData.contractAddress ||
-    contractAddress === polygonContractData.contractAddress
-  );
+  return isEvmContract(contractAddress) || isTerraContract(contractAddress);
 }
 
 async function postVaa(
@@ -408,379 +532,15 @@ async function callBack(err: any, result: any) {
   // logger.debug("leaving callback.");
 }
 
-// Ethereum (Goerli) set up
-function makeEthContractData(): TargetContractData {
-  let overridden: boolean = false;
-  let contractAddress: string = CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM;
-  if (env.eth_contract_address) {
-    contractAddress = env.eth_contract_address;
-    overridden = true;
-  }
-
-  contractAddress = contractAddress.toLowerCase();
-  if (contractAddress.search("0x") == 0) {
-    contractAddress = contractAddress.substring(2);
-  }
-
-  if (overridden) {
-    logger.info(
-      "Connecting to Ethereum: overriding contract address: [" +
-        contractAddress +
-        "], node: [" +
-        env.eth_provider_url +
-        "], token bridge address: [" +
-        env.eth_token_bridge_address +
-        "]"
-    );
-  } else {
-    logger.info(
-      "Connecting to Ethereum: contract address: [" +
-        contractAddress +
-        "], node: [" +
-        env.eth_provider_url +
-        "], token bridge address: [" +
-        env.eth_token_bridge_address +
-        "]"
-    );
-  }
-
-  const provider = new ethers.providers.StaticJsonRpcProvider(
-    env.eth_provider_url
-  );
-
-  const contract = new ethers.Contract(
-    contractAddress,
-    SWAP_CONTRACT_V3_ABI,
-    provider
-  );
-
-  const wallet = new ethers.Wallet(env.wallet_private_key, provider);
-  const contractWithSigner = contract.connect(wallet);
-
-  return {
-    name: "Ethereum",
-    contractAddress: contractAddress,
-    tokenBridgeAddress: env.eth_token_bridge_address,
-    contract: contract,
-    provider: provider,
-    wallet: wallet,
-    contractWithSigner: contractWithSigner,
-  };
-}
-
-// Polygon (Mumbai) set up
-function makePolygonContractData(): TargetContractData {
-  let overridden: boolean = false;
-  let contractAddress: string = CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON;
-  if (env.polygon_contract_address) {
-    contractAddress = env.polygon_contract_address;
-    overridden = true;
-  }
-
-  contractAddress = contractAddress.toLowerCase();
-  if (contractAddress.search("0x") == 0) {
-    contractAddress = contractAddress.substring(2);
-  }
-
-  if (overridden) {
-    logger.info(
-      "Connecting to Polygon: overriding contract address: [" +
-        contractAddress +
-        "], node: [" +
-        env.polygon_provider_url +
-        "], token bridge address: [" +
-        env.polygon_token_bridge_address +
-        "]"
-    );
-  } else {
-    logger.info(
-      "Connecting to Polygon: contract address: [" +
-        contractAddress +
-        "], node: [" +
-        env.polygon_provider_url +
-        "], token bridge address: [" +
-        env.polygon_token_bridge_address +
-        "]"
-    );
-  }
-
-  const provider = new ethers.providers.StaticJsonRpcProvider(
-    env.polygon_provider_url
-  );
-
-  const contract = new ethers.Contract(
-    contractAddress,
-    SWAP_CONTRACT_V2_ABI,
-    provider
-  );
-
-  const wallet = new ethers.Wallet(env.wallet_private_key, provider);
-  const contractWithSigner = contract.connect(wallet);
-
-  return {
-    name: "Polygon",
-    contractAddress: contractAddress,
-    tokenBridgeAddress: env.polygon_token_bridge_address,
-    contract: contract,
-    provider: provider,
-    wallet: wallet,
-    contractWithSigner: contractWithSigner,
-  };
-}
-
-/*
-  // GOERLI_PROVIDER = Ethereum
-  // MUMBAI_PROVIDER = Polygon
-
-  if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM) {
-    // Use one of the V3 swap methods.
-  } else if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON) {
-    // Use one of the V2 swap methods.
-  } else {
-    // Error
-  }
-
-  if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 1) {
-    // swapExactInFromVaaNative
-  } else if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 2) {
-    // swapExactInFromVaaToken    
-  } else if (
-    t3Payload.swapFunctionType === 2 &&  t3Payload.swapCurrencyType === 1) {
-    // swapExactOutFromVaaNative
-  } else if (t3Payload.swapFunctionType === 2 && t3Payload.swapCurrencyType === 2) {
-    // swapExactOutFromVaaToken
-  } else {
-    // error
-  }
-*/
-
 async function relayVaa(vaaBytes: string, t3Payload: Type3Payload) {
   const signedVaaArray = hexToUint8Array(vaaBytes);
 
-  let exactIn: boolean = false;
-  if (t3Payload.swapFunctionType === 1) {
-    exactIn = true;
-  } else if (t3Payload.swapFunctionType !== 2) {
-    logger.error(
-      "relayVaa: unsupported swapFunctionType: [" +
-        t3Payload.swapFunctionType +
-        "]"
-    );
-  }
-
-  let native: boolean = false;
-  if (t3Payload.swapCurrencyType === 1) {
-    native = true;
-  } else if (t3Payload.swapCurrencyType !== 2) {
-    logger.error(
-      "relayVaa: unsupported swapCurrencyType: [" +
-        t3Payload.swapCurrencyType +
-        "]"
-    );
-  }
-
-  logger.debug(
-    "relayVaa: contractAddress: [" +
-      t3Payload.contractAddress +
-      "], ethContract: [" +
-      ethContractData.contractAddress +
-      "], polygonContract[" +
-      polygonContractData.contractAddress +
-      "]"
-  );
-
-  if (t3Payload.contractAddress === ethContractData.contractAddress) {
-    await relayVaaToChain(
-      t3Payload,
-      ethContractData,
-      signedVaaArray,
-      exactIn,
-      native
-    );
-  } else if (
-    t3Payload.contractAddress === polygonContractData.contractAddress
-  ) {
-    await relayVaaToChain(
-      t3Payload,
-      polygonContractData,
-      signedVaaArray,
-      exactIn,
-      native
-    );
-  } else {
-    logger.error(
-      "relayVaa: unexpected contract: [" +
-        t3Payload.contractAddress +
-        "], this should not happen!"
-    );
-  }
-}
-
-async function relayVaaToChain(
-  t3Payload: Type3Payload,
-  tcd: TargetContractData,
-  signedVaaArray: Uint8Array,
-  exactIn: boolean,
-  native: boolean
-) {
-  logger.debug(
-    "relayVaaTo" +
-      tcd.name +
-      ": checking if already redeemed on " +
-      tcd.name +
-      " using tokenBridgeAddress [" +
-      tcd.tokenBridgeAddress +
-      "]"
-  );
-
-  if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
-    logger.info(
-      "relayVaaTo" +
-        tcd.name +
-        ": contract: [" +
-        t3Payload.contractAddress +
-        "], exactIn: " +
-        exactIn +
-        ", native: " +
-        native +
-        ": already transferred"
-    );
-
+  if (t3Payload.targetChainId === 3) {
+    relayVaaToTerra(t3Payload, signedVaaArray);
     return;
   }
 
-  logger.info(
-    "relayVaaTo" +
-      tcd.name +
-      ": contract: [" +
-      t3Payload.contractAddress +
-      "], exactIn: " +
-      exactIn +
-      ", native: " +
-      native +
-      ": submitting redeem request"
-  );
-
-  try {
-    let receipt: any = null;
-    if (exactIn) {
-      if (native) {
-        receipt = await swap.swapExactInFromVaaNative(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      } else {
-        receipt = await swap.swapExactInFromVaaToken(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      }
-    } else {
-      if (native) {
-        receipt = await swap.swapExactOutFromVaaNative(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      } else {
-        receipt = await swap.swapExactOutFromVaaToken(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      }
-    }
-
-    logger.info(
-      "relayVaaTo" +
-        tcd.name +
-        ": contract: [" +
-        t3Payload.contractAddress +
-        "], exactIn: " +
-        exactIn +
-        ", native: " +
-        native +
-        ": success, txHash: " +
-        receipt.transactionHash
-    );
-  } catch (e: any) {
-    if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
-      logger.info(
-        "relayVaaTo" +
-          tcd.name +
-          ": contract: [" +
-          t3Payload.contractAddress +
-          "], exactIn: " +
-          exactIn +
-          ", native: " +
-          native +
-          ": relay failed because the vaa has already been redeemed"
-      );
-
-      return;
-    }
-
-    logger.error(
-      "relayVaaTo" +
-        tcd.name +
-        ": contract: [" +
-        t3Payload.contractAddress +
-        "], exactIn: " +
-        exactIn +
-        ", native: " +
-        native +
-        ": transaction failed: %o",
-      e
-    );
-  }
-
-  if (await isRedeemed(t3Payload, tcd, signedVaaArray)) {
-    logger.info(
-      "relayVaaTo" +
-        tcd.name +
-        ": contract: [" +
-        t3Payload.contractAddress +
-        "], exactIn: " +
-        exactIn +
-        ", native: " +
-        native +
-        ": redeem succeeded"
-    );
-  } else {
-    logger.error(
-      "relayVaaTo" +
-        tcd.name +
-        ": contract: [" +
-        t3Payload.contractAddress +
-        "], exactIn: " +
-        exactIn +
-        ", native: " +
-        native +
-        ": redeem failed!"
-    );
-  }
-}
-
-async function isRedeemed(
-  t3Payload: Type3Payload,
-  tcd: TargetContractData,
-  signedVaaArray: Uint8Array
-): Promise<boolean> {
-  let redeemed: boolean = false;
-  try {
-    redeemed = await getIsTransferCompletedEth(
-      tcd.tokenBridgeAddress,
-      tcd.provider,
-      signedVaaArray
-    );
-  } catch (e) {
-    logger.error(
-      "relayVaaTo" +
-        tcd.name +
-        ": failed to check if transfer is already complete, will attempt the transfer, e: %o",
-      e
-    );
-  }
-
-  return redeemed;
+  relayVaaToEvm(signedVaaArray, t3Payload);
 }
 
 ///////////////////////////////// Start of logger stuff ///////////////////////////////////////////
