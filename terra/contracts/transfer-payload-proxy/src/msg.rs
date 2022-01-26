@@ -14,6 +14,7 @@ pub struct InstantiateMsg {
     pub wormhole_contract: HumanAddr,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum ExecuteMsg {
     RedeemPayload { data: Binary },
 }
