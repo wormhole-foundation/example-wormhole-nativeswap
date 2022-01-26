@@ -14,11 +14,12 @@ import {
 } from "@uniswap/v3-sdk";
 
 import { UniEvmToken, UniswapRouterCore } from "./uniswap-core";
-import { UNISWAP_V3_FACTORY_ADDRESS } from "../utils/consts";
+import { WETH_TOKEN_INFO, UNISWAP_V3_FACTORY_ADDRESS } from "../utils/consts";
+import { UstLocation } from "./generic";
 
 export const PROTOCOL = "UniswapV3";
 
-export class SingleAmmSwapRouter extends UniswapRouterCore {
+export class UniswapV3Router extends UniswapRouterCore {
   poolContract: ethers.Contract;
   pool: Pool;
   poolFee: FeeAmount;
@@ -30,24 +31,26 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     this.poolFee = FeeAmount.MEDIUM;
   }
 
+  async initialize(ustLocation: UstLocation): Promise<void> {
+    await this.initializeTokens(WETH_TOKEN_INFO, ustLocation);
+    return;
+  }
+
   getPoolFee(): string {
     return this.poolFee.toString();
   }
 
-  computePoolAddress(tokenIn: UniEvmToken, tokenOut: UniEvmToken): string {
+  computePoolAddress(): string {
     return computePoolAddress({
       factoryAddress: UNISWAP_V3_FACTORY_ADDRESS,
       fee: this.poolFee,
-      tokenA: tokenIn.getUniToken(),
-      tokenB: tokenOut.getUniToken(),
+      tokenA: this.tokenIn.getUniToken(),
+      tokenB: this.tokenOut.getUniToken(),
     });
   }
 
-  async computeAndVerifyPoolAddress(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken
-  ): Promise<string> {
-    const pairAddress = this.computePoolAddress(tokenIn, tokenOut);
+  async computeAndVerifyPoolAddress(): Promise<string> {
+    const pairAddress = this.computePoolAddress();
 
     // verify by attempting to call factory()
     const poolContract = new ethers.Contract(
@@ -60,8 +63,8 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     return pairAddress;
   }
 
-  async createPool(tokenIn: UniEvmToken, tokenOut: UniEvmToken): Promise<Pool> {
-    const poolAddress = this.computePoolAddress(tokenIn, tokenOut);
+  async createPool(): Promise<Pool> {
+    const poolAddress = this.computePoolAddress();
 
     const poolContract = new ethers.Contract(
       poolAddress,
@@ -103,8 +106,8 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     ];
 
     return new Pool(
-      tokenIn.getUniToken(),
-      tokenOut.getUniToken(),
+      this.tokenIn.getUniToken(),
+      this.tokenOut.getUniToken(),
       this.poolFee,
       sqrtPriceX96.toString(), //note the description discrepancy - sqrtPriceX96 and sqrtRatioX96 are interchangable values
       liquidity,
@@ -114,13 +117,15 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
   }
 
   async computeTradeExactIn(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
     amount: string
   ): Promise<Trade<Token, Token, TradeType.EXACT_INPUT>> {
     // create pool
-    const pool = await this.createPool(tokenIn, tokenOut);
+    const pool = await this.createPool();
+
     // let's get that quote
+    const tokenIn = this.tokenIn;
+    const tokenOut = this.tokenOut;
+
     const amountIn = tokenIn.computeUnitAmount(amount);
 
     const route = new Route(
@@ -136,13 +141,15 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
   }
 
   async computeTradeExactOut(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
     amount: string
   ): Promise<Trade<Token, Token, TradeType.EXACT_OUTPUT>> {
     // create pool
-    const pool = await this.createPool(tokenIn, tokenOut);
+    const pool = await this.createPool();
+
     // let's get that quote
+    const tokenIn = this.tokenIn;
+    const tokenOut = this.tokenOut;
+
     const amountOut = tokenOut.computeUnitAmount(amount);
 
     const route = new Route(
@@ -160,15 +167,11 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     );
   }
 
-  async fetchQuoteAmountOut(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
-    amountIn: string,
-    slippage: string
-  ): Promise<ethers.BigNumber> {
+  async fetchExactInQuote(amountIn: string, slippage: string): Promise<string> {
     // get the quote
-    const trade = await this.computeTradeExactIn(tokenIn, tokenOut, amountIn);
+    const trade = await this.computeTradeExactIn(amountIn);
 
+    const tokenOut = this.tokenOut;
     const decimals = tokenOut.getDecimals();
 
     // calculate output amount with slippage
@@ -183,18 +186,22 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
       .mulUnsafe(slippageMultiplier)
       .round(decimals);
 
-    return tokenOut.computeUnitAmount(minAmountOutWithSlippage.toString());
+    /*
+    return tokenOut
+      .computeUnitAmount(minAmountOutWithSlippage.toString())
+      .toString();
+      */
+    return minAmountOutWithSlippage.toString();
   }
 
-  async fetchQuoteAmountIn(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
+  async fetchExactOutQuote(
     amountOut: string,
     slippage: string
-  ): Promise<ethers.BigNumber> {
+  ): Promise<string> {
     // get the quote
-    const trade = await this.computeTradeExactOut(tokenIn, tokenOut, amountOut);
+    const trade = await this.computeTradeExactOut(amountOut);
 
+    const tokenIn = this.tokenIn;
     const decimals = tokenIn.getDecimals();
 
     // calculate output amount with slippage
@@ -209,7 +216,12 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
       .divUnsafe(slippageDivisor)
       .round(decimals);
 
-    return tokenIn.computeUnitAmount(maxAmountInWithSlippage.toString());
+    /*
+    return tokenIn
+      .computeUnitAmount(maxAmountInWithSlippage.toString())
+      .toString();
+      */
+    return maxAmountInWithSlippage.toString();
   }
 
   getProtocol(): string {

@@ -1,24 +1,44 @@
-export abstract class DexRouter {
-  abstract makeToken(tokenAddress: string): any;
-  abstract quoteLot(tokenA: any, tokenB: any, amount: string): Promise<any>;
-  abstract setSlippage(slippage: string): void;
+import { FixedNumber } from "ethers";
+
+export enum UstLocation {
+  In = 1,
+  Out,
+}
+
+export abstract class RouterCore {
+  abstract computeAndVerifyPoolAddress(): Promise<string>;
+
+  abstract computePoolAddress(): string;
+
+  //abstract computeUnitAmountIn(amount: string): string;
+
+  abstract computeUnitAmountOut(amount: string): string;
+
+  abstract fetchExactInQuote(
+    amountOut: string,
+    slippage: string
+  ): Promise<string>;
+
+  abstract fetchExactOutQuote(
+    amountOut: string,
+    slippage: string
+  ): Promise<string>;
+
+  abstract formatAmountIn(amount: string): string;
+
+  abstract formatAmountOut(amount: string): string;
+
+  abstract getProtocol(): string;
+
+  abstract getTokenInDecimals(): number;
+
+  abstract getTokenOutDecimals(): number;
+
+  abstract getTokenOutAddress(): string;
 }
 
 export abstract class GenericToken {
   abstract getAddress(): string;
 
   abstract getDecimals(): number;
-}
-
-// TODO: wrap SwapRoute and other routes
-export class GenericRoute {
-  route: any;
-
-  constructor(route: any) {
-    this.route = route;
-  }
-
-  getRoute(): any {
-    return this.route;
-  }
 }

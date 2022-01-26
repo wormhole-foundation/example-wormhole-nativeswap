@@ -1,15 +1,14 @@
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
-  CHAIN_ID_POLYGON as WORMHOLE_CHAIN_ID_POLYGON,
-  CHAIN_ID_ETH as WORMHOLE_CHAIN_ID_ETHEREUM,
   ChainId,
   getEmitterAddressEth,
   hexToUint8Array,
   nativeToHexString,
   parseSequenceFromLogEth,
-  getSignedVAAWithRetry,
+  //getSignedVAAWithRetry,
 } from "@certusone/wormhole-sdk";
+import getSignedVAAWithRetry from "@certusone/wormhole-sdk/lib/cjs/rpc/getSignedVAAWithRetry";
 import { grpc } from "@improbable-eng/grpc-web";
 import { UniEvmToken } from "../route/uniswap-core";
 import {
@@ -21,15 +20,22 @@ import {
   UniswapToUniswapQuoter,
 } from "../route/cross-quote";
 import {
+  TOKEN_BRIDGE_ADDRESS_ETHEREUM,
   TOKEN_BRIDGE_ADDRESS_POLYGON,
+  TOKEN_BRIDGE_ADDRESS_TERRA,
   CORE_BRIDGE_ADDRESS_ETHEREUM,
   CORE_BRIDGE_ADDRESS_POLYGON,
-  TOKEN_BRIDGE_ADDRESS_ETHEREUM,
+  CORE_BRIDGE_ADDRESS_TERRA,
+  WORMHOLE_CHAIN_ID_ETHEREUM,
+  WORMHOLE_CHAIN_ID_POLYGON,
+  WORMHOLE_CHAIN_ID_TERRA,
   WORMHOLE_RPC_HOSTS,
-  POLYGON_NETWORK_CHAIN_ID,
-  ETH_NETWORK_CHAIN_ID,
+  //ETH_NETWORK_CHAIN_ID,
+  //POLYGON_NETWORK_CHAIN_ID,
+  //TERRA_NETWORK_CHAIN_ID,
   WETH_TOKEN_INFO,
   WMATIC_TOKEN_INFO,
+  UST_TOKEN_INFO,
 } from "../utils/consts";
 import {
   CROSSCHAINSWAP_GAS_PARAMETERS,
@@ -38,10 +44,13 @@ import {
   swapExactOutFromVaaNative,
   swapExactOutFromVaaToken,
 } from "./util";
-import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
-import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
+import { abi as SWAP_CONTRACT_V2_ABI } from "../../abi/contracts/CrossChainSwapV2.json";
+import { abi as SWAP_CONTRACT_V3_ABI } from "../../abi/contracts/CrossChainSwapV3.json";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../../scripts/contract-addresses/goerli";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../../scripts/contract-addresses/mumbai";
+
+// placeholders
+const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA = "";
 
 interface SwapContractParameters {
   address: string;
@@ -80,13 +89,27 @@ const EXECUTION_PARAMETERS_POLYGON: ExecutionParameters = {
   },
 };
 
-function makeExecutionParameters(id: number): ExecutionParameters {
-  switch (id) {
-    case ETH_NETWORK_CHAIN_ID: {
+const EXECUTION_PARAMETERS_TERRA: ExecutionParameters = {
+  crossChainSwap: {
+    address: CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA,
+  },
+  wormhole: {
+    chainId: WORMHOLE_CHAIN_ID_TERRA,
+    coreBridgeAddress: CORE_BRIDGE_ADDRESS_TERRA,
+    tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_TERRA,
+  },
+};
+
+function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
+  switch (chainId) {
+    case WORMHOLE_CHAIN_ID_ETHEREUM: {
       return EXECUTION_PARAMETERS_ETHEREUM;
     }
-    case POLYGON_NETWORK_CHAIN_ID: {
+    case WORMHOLE_CHAIN_ID_POLYGON: {
       return EXECUTION_PARAMETERS_POLYGON;
+    }
+    case WORMHOLE_CHAIN_ID_TERRA: {
+      return EXECUTION_PARAMETERS_TERRA;
     }
     default: {
       throw Error("unrecognized chain id");
@@ -94,7 +117,7 @@ function makeExecutionParameters(id: number): ExecutionParameters {
   }
 }
 
-async function approveContractTokenSpend(
+async function evmApproveContractTokenSpend(
   provider: ethers.providers.Provider,
   signer: ethers.Signer,
   tokenContract: ethers.Contract,
@@ -140,7 +163,7 @@ function makeCrossChainSwapV2Contract(
   return new ethers.Contract(contractAddress, SWAP_CONTRACT_V2_ABI, provider);
 }
 
-function makeCrossChainSwapContract(
+function makeCrossChainSwapEvmContract(
   provider: ethers.providers.Provider,
   protocol: string,
   contractAddress: string
@@ -163,7 +186,7 @@ function addressToBytes32(
   return hexToUint8Array(hexString);
 }
 
-async function approveAndSwapExactIn(
+async function evmApproveAndSwapExactIn(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
   srcTokenIn: UniEvmToken,
@@ -175,7 +198,7 @@ async function approveAndSwapExactIn(
   const swapContractParams = srcExecutionParams.crossChainSwap;
 
   const protocol = quoteParams.src.protocol;
-  const swapContract = makeCrossChainSwapContract(
+  const swapContract = makeCrossChainSwapEvmContract(
     srcProvider,
     protocol,
     swapContractParams.address
@@ -187,18 +210,19 @@ async function approveAndSwapExactIn(
 
   const address = await srcWallet.getAddress();
 
+  const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
+
   const swapParams = [
     amountIn,
     quoteParams.src.minAmountOut,
     quoteParams.dst.minAmountOut,
-    address,
+    addressToBytes32(address, dstWormholeChainId),
     quoteParams.src.deadline,
     quoteParams.dst.poolFee || quoteParams.src.poolFee,
   ];
 
   const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
 
-  const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
   const dstContractAddress = addressToBytes32(
     dstExecutionParams.crossChainSwap.address,
     dstWormholeChainId
@@ -227,7 +251,7 @@ async function approveAndSwapExactIn(
     return tx.wait();
   } else {
     console.info("approving contract to spend token in");
-    await approveContractTokenSpend(
+    await evmApproveContractTokenSpend(
       srcProvider,
       srcWallet,
       srcTokenIn.getContract(),
@@ -249,7 +273,7 @@ async function approveAndSwapExactIn(
   }
 }
 
-async function approveAndSwapExactOut(
+async function evmApproveAndSwapExactOut(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
   srcTokenIn: UniEvmToken,
@@ -261,7 +285,7 @@ async function approveAndSwapExactOut(
   const swapContractParams = srcExecutionParams.crossChainSwap;
 
   const protocol = quoteParams.src.protocol;
-  const swapContract = makeCrossChainSwapContract(
+  const swapContract = makeCrossChainSwapEvmContract(
     srcProvider,
     protocol,
     swapContractParams.address
@@ -274,17 +298,18 @@ async function approveAndSwapExactOut(
 
   const address = await srcWallet.getAddress();
 
+  const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
+
   const swapParams = [
     amountOut,
     maxAmountIn,
     quoteParams.dst.amountOut,
-    address,
+    addressToBytes32(address, dstWormholeChainId),
     quoteParams.src.deadline,
     quoteParams.dst.poolFee || quoteParams.src.poolFee,
   ];
   const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
 
-  const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
   const dstContractAddress = addressToBytes32(
     dstExecutionParams.crossChainSwap.address,
     dstWormholeChainId
@@ -313,7 +338,7 @@ async function approveAndSwapExactOut(
     return tx.wait();
   } else {
     console.info("approving contract to spend token in");
-    await approveContractTokenSpend(
+    await evmApproveContractTokenSpend(
       srcProvider,
       srcWallet,
       srcTokenIn.getContract(),
@@ -345,7 +370,7 @@ async function swapExactInFromVaa(
 ): Promise<TransactionReceipt> {
   const swapContractParams = dstExecutionParams.crossChainSwap;
 
-  const swapContract = makeCrossChainSwapContract(
+  const swapContract = makeCrossChainSwapEvmContract(
     dstProvider,
     dstProtocol,
     swapContractParams.address
@@ -371,7 +396,7 @@ async function swapExactOutFromVaa(
 ): Promise<TransactionReceipt> {
   const swapContractParams = dstExecutionParams.crossChainSwap;
 
-  const swapContract = makeCrossChainSwapContract(
+  const swapContract = makeCrossChainSwapEvmContract(
     dstProvider,
     dstProtocol,
     swapContractParams.address
@@ -399,7 +424,7 @@ interface VaaSearchParams {
   emitterAddress: string;
 }
 
-export function makeProvider(tokenAddress: string) {
+export function makeEvmProvider(tokenAddress: string) {
   switch (tokenAddress) {
     case WETH_TOKEN_INFO.address: {
       const url = process.env.REACT_APP_GOERLI_PROVIDER;
@@ -416,6 +441,7 @@ export function makeProvider(tokenAddress: string) {
       return new ethers.providers.StaticJsonRpcProvider(url);
     }
     default: {
+      console.log("huh?", tokenAddress);
       throw Error("unrecognized token address");
     }
   }
@@ -440,8 +466,16 @@ export class UniswapToUniswapExecutor {
   transportFactory: grpc.TransportFactory;
   vaaSearchParams: VaaSearchParams;
   vaaBytes: Uint8Array;
-  srcReceipt: TransactionReceipt;
-  dstReceipt: TransactionReceipt;
+
+  // receipts
+  srcEvmReceipt: TransactionReceipt;
+  dstEvmReceipt: TransactionReceipt;
+  srcTerraReceipt: any;
+  dstTerraReceipt: any;
+
+  constructor() {
+    this.quoter = new UniswapToUniswapQuoter();
+  }
 
   async initialize(
     tokenInAddress: string,
@@ -450,20 +484,14 @@ export class UniswapToUniswapExecutor {
   ): Promise<void> {
     this.isNative = isNative;
 
-    const srcProvider = makeProvider(tokenInAddress);
-    const dstProvider = makeProvider(tokenOutAddress);
-
-    this.quoter = new UniswapToUniswapQuoter(srcProvider, dstProvider);
-    await this.quoter.initialize();
-
-    await this.makeTokens(tokenInAddress, tokenOutAddress);
+    await this.quoter.initialize(tokenInAddress, tokenOutAddress);
 
     // now that we have a chain id for each network, get contract info for each chain
     this.srcExecutionParams = makeExecutionParameters(
-      this.quoter.srcNetwork.chainId
+      this.quoter.getSrcChainId()
     );
     this.dstExecutionParams = makeExecutionParameters(
-      this.quoter.dstNetwork.chainId
+      this.quoter.getDstChainId()
     );
   }
 
@@ -483,6 +511,7 @@ export class UniswapToUniswapExecutor {
     this.quoter.setDeadlines(deadline);
   }
 
+  /*
   async makeTokens(
     tokenInAddress: string,
     tokenOutAddress: string
@@ -507,7 +536,7 @@ export class UniswapToUniswapExecutor {
   getTokens(): CrossChainSwapTokens {
     return this.tokens;
   }
-
+*/
   async computeAndVerifySrcPoolAddress(): Promise<string> {
     return this.quoter.computeAndVerifySrcPoolAddress();
   }
@@ -546,19 +575,19 @@ export class UniswapToUniswapExecutor {
     return this.cachedExactOutParams;
   }
 
-  getSrcProvider(): ethers.providers.Provider {
-    return this.quoter.srcProvider;
+  getSrcEvmProvider(): ethers.providers.Provider {
+    return this.quoter.getSrcEvmProvider();
   }
 
-  getDstProvider(): ethers.providers.Provider {
-    return this.quoter.dstProvider;
+  getDstEvmProvider(): ethers.providers.Provider {
+    return this.quoter.getDstEvmProvider();
   }
 
-  async approveAndSwapExactIn(
+  async evmApproveAndSwapExactIn(
     wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
-    return approveAndSwapExactIn(
-      this.getSrcProvider(),
+    return evmApproveAndSwapExactIn(
+      this.getSrcEvmProvider(),
       wallet,
       this.tokens.srcIn,
       this.cachedExactInParams,
@@ -568,11 +597,11 @@ export class UniswapToUniswapExecutor {
     );
   }
 
-  async approveAndSwapExactOut(
+  async evmApproveAndSwapExactOut(
     wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
-    return approveAndSwapExactOut(
-      this.getSrcProvider(),
+    return evmApproveAndSwapExactOut(
+      this.getSrcEvmProvider(),
       wallet,
       this.tokens.srcIn,
       this.cachedExactOutParams,
@@ -582,23 +611,40 @@ export class UniswapToUniswapExecutor {
     );
   }
 
-  async approveAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
+  srcIsUst(): boolean {
+    return (
+      this.quoter.tokenInAddress === UST_TOKEN_INFO.address &&
+      this.cachedExactInParams.src === undefined
+    );
+  }
+
+  async evmApproveAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
     const quoteType = this.quoteType;
 
     if (quoteType === QuoteType.ExactIn) {
-      this.srcReceipt = await this.approveAndSwapExactIn(wallet);
+      this.srcEvmReceipt = await this.evmApproveAndSwapExactIn(wallet);
     } else if (quoteType === QuoteType.ExactOut) {
-      this.srcReceipt = await this.approveAndSwapExactOut(wallet);
+      this.srcEvmReceipt = await this.evmApproveAndSwapExactOut(wallet);
     } else {
       throw Error("no quote found");
     }
 
     this.fetchAndSetEmitterAndSequence();
-    return this.srcReceipt;
+    return this.srcEvmReceipt;
   }
 
   fetchAndSetEmitterAndSequence(): void {
-    const receipt = this.srcReceipt;
+    // TODO
+    return;
+  }
+
+  fetchAndSetTerraEmitterAndSequence(): void {
+    // TODO
+    return;
+  }
+
+  fetchAndSetEvmEmitterAndSequence(): void {
+    const receipt = this.srcEvmReceipt;
     if (receipt === undefined) {
       throw Error("no swap receipt found");
     }
@@ -623,11 +669,15 @@ export class UniswapToUniswapExecutor {
     const emitterAddress = vaaSearchParams.emitterAddress;
     console.info(`sequence: ${sequence}, emitterAddress: ${emitterAddress}`);
     // wait for VAA to be signed
+
     const vaaResponse = await getSignedVAAWithRetry(
       WORMHOLE_RPC_HOSTS,
       this.srcExecutionParams.wormhole.chainId,
       vaaSearchParams.emitterAddress,
-      vaaSearchParams.sequence
+      vaaSearchParams.sequence,
+      {
+        transport: this.transportFactory,
+      }
     );
     // grab vaaBytes
     this.vaaBytes = vaaResponse.vaaBytes;
@@ -636,22 +686,27 @@ export class UniswapToUniswapExecutor {
   async fetchVaaAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
     await this.fetchSignedVaaFromSwap();
 
+    // check if Terra transaction
+    // TODO: change return as something else (not evm TransactionReceipt)
+
     const quoteType = this.quoteType;
 
     if (quoteType === QuoteType.ExactIn) {
-      this.dstReceipt = await this.swapExactInFromVaa(wallet);
+      this.dstEvmReceipt = await this.evmSwapExactInFromVaa(wallet);
     } else if (quoteType === QuoteType.ExactOut) {
-      this.dstReceipt = await this.swapExactOutFromVaa(wallet);
+      this.dstEvmReceipt = await this.evmSwapExactOutFromVaa(wallet);
     } else {
       throw Error("no quote found");
     }
 
-    return this.dstReceipt;
+    return this.dstEvmReceipt;
   }
 
-  async swapExactInFromVaa(wallet: ethers.Signer): Promise<TransactionReceipt> {
+  async evmSwapExactInFromVaa(
+    wallet: ethers.Signer
+  ): Promise<TransactionReceipt> {
     return swapExactInFromVaa(
-      this.getDstProvider(),
+      this.getDstEvmProvider(),
       wallet,
       this.dstExecutionParams,
       this.cachedExactInParams.dst.protocol,
@@ -660,17 +715,21 @@ export class UniswapToUniswapExecutor {
     );
   }
 
-  async swapExactOutFromVaa(
+  async evmSwapExactOutFromVaa(
     wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
     return swapExactOutFromVaa(
-      this.getDstProvider(),
+      this.getDstEvmProvider(),
       wallet,
       this.dstExecutionParams,
       this.cachedExactOutParams.dst.protocol,
       this.vaaBytes,
       this.isNative
     );
+  }
+
+  setTransport(transportFactory: grpc.TransportFactory) {
+    this.transportFactory = transportFactory;
   }
 
   //getSwapResult(
@@ -680,7 +739,7 @@ export class UniswapToUniswapExecutor {
   //  console.log(this.cachedExactInParams.dst.protocol);
   //  console.log(this.dstExecutionParams.crossChainSwap.address);
   //  const contract = makeCrossChainSwapContract(
-  //    this.getDstProvider(),
+  //    this.getDstEvmProvider(),
   //    this.quoteType === QuoteType.ExactIn
   //      ? this.cachedExactInParams.dst.protocol
   //      : this.cachedExactOutParams.dst.protocol,

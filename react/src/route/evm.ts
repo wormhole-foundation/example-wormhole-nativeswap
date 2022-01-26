@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import { GenericToken } from "./generic";
 
 // erc20 spec
-import { abi as Erc20Abi } from "../abi/erc20.json";
+import { abi as Erc20Abi } from "../../abi/erc20.json";
 import {
   TransactionReceipt,
   TransactionRequest,
