@@ -1492,6 +1492,7 @@ dependencies = [
  "cosmwasm-std",
  "cosmwasm-storage",
  "cosmwasm-vm",
+ "cw20-base",
  "schemars",
  "serde",
  "token-bridge-terra",
