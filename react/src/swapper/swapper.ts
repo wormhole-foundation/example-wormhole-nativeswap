@@ -1,14 +1,17 @@
+//@ts-nocheck
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
   ChainId,
+  CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
+  CHAIN_ID_TERRA,
   getEmitterAddressEth,
   hexToUint8Array,
   nativeToHexString,
   parseSequenceFromLogEth,
-  //getSignedVAAWithRetry,
+  getSignedVAAWithRetry,
 } from "@certusone/wormhole-sdk";
-import getSignedVAAWithRetry from "@certusone/wormhole-sdk/lib/cjs/rpc/getSignedVAAWithRetry";
 import { grpc } from "@improbable-eng/grpc-web";
 import { UniEvmToken } from "../route/uniswap-core";
 import {
@@ -26,9 +29,6 @@ import {
   CORE_BRIDGE_ADDRESS_ETHEREUM,
   CORE_BRIDGE_ADDRESS_POLYGON,
   CORE_BRIDGE_ADDRESS_TERRA,
-  WORMHOLE_CHAIN_ID_ETHEREUM,
-  WORMHOLE_CHAIN_ID_POLYGON,
-  WORMHOLE_CHAIN_ID_TERRA,
   WORMHOLE_RPC_HOSTS,
   //ETH_NETWORK_CHAIN_ID,
   //POLYGON_NETWORK_CHAIN_ID,
@@ -44,10 +44,10 @@ import {
   swapExactOutFromVaaNative,
   swapExactOutFromVaaToken,
 } from "./util";
-import { abi as SWAP_CONTRACT_V2_ABI } from "../../abi/contracts/CrossChainSwapV2.json";
-import { abi as SWAP_CONTRACT_V3_ABI } from "../../abi/contracts/CrossChainSwapV3.json";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../../scripts/contract-addresses/goerli";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../../scripts/contract-addresses/mumbai";
+import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
+import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
 
 // placeholders
 const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA = "";
@@ -72,7 +72,7 @@ const EXECUTION_PARAMETERS_ETHEREUM: ExecutionParameters = {
     address: CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM,
   },
   wormhole: {
-    chainId: WORMHOLE_CHAIN_ID_ETHEREUM,
+    chainId: CHAIN_ID_ETH,
     coreBridgeAddress: CORE_BRIDGE_ADDRESS_ETHEREUM,
     tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_ETHEREUM,
   },
@@ -83,7 +83,7 @@ const EXECUTION_PARAMETERS_POLYGON: ExecutionParameters = {
     address: CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON,
   },
   wormhole: {
-    chainId: WORMHOLE_CHAIN_ID_POLYGON,
+    chainId: CHAIN_ID_POLYGON,
     coreBridgeAddress: CORE_BRIDGE_ADDRESS_POLYGON,
     tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_POLYGON,
   },
@@ -94,7 +94,7 @@ const EXECUTION_PARAMETERS_TERRA: ExecutionParameters = {
     address: CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA,
   },
   wormhole: {
-    chainId: WORMHOLE_CHAIN_ID_TERRA,
+    chainId: CHAIN_ID_TERRA,
     coreBridgeAddress: CORE_BRIDGE_ADDRESS_TERRA,
     tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_TERRA,
   },
@@ -102,13 +102,13 @@ const EXECUTION_PARAMETERS_TERRA: ExecutionParameters = {
 
 function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
   switch (chainId) {
-    case WORMHOLE_CHAIN_ID_ETHEREUM: {
+    case CHAIN_ID_ETH: {
       return EXECUTION_PARAMETERS_ETHEREUM;
     }
-    case WORMHOLE_CHAIN_ID_POLYGON: {
+    case CHAIN_ID_POLYGON: {
       return EXECUTION_PARAMETERS_POLYGON;
     }
-    case WORMHOLE_CHAIN_ID_TERRA: {
+    case CHAIN_ID_TERRA: {
       return EXECUTION_PARAMETERS_TERRA;
     }
     default: {

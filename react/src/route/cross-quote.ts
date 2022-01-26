@@ -7,9 +7,6 @@ import {
   WETH_TOKEN_INFO,
   WMATIC_TOKEN_INFO,
   UST_TOKEN_INFO,
-  WORMHOLE_CHAIN_ID_ETHEREUM,
-  WORMHOLE_CHAIN_ID_POLYGON,
-  WORMHOLE_CHAIN_ID_TERRA,
 } from "../utils/consts";
 import { addFixedAmounts, subtractFixedAmounts } from "../utils/math";
 import { UstLocation } from "./generic";
@@ -19,7 +16,12 @@ import {
   makeExactInParameters,
   makeExactOutParameters,
 } from "./uniswap-core";
-import { ChainId } from "@certusone/wormhole-sdk";
+import {
+  ChainId,
+  CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
+  CHAIN_ID_TERRA,
+} from "@certusone/wormhole-sdk";
 
 export { PROTOCOL as PROTOCOL_UNISWAP_V2 } from "./uniswap-v2";
 export { PROTOCOL as PROTOCOL_UNISWAP_V3 } from "./uniswap-v3";
@@ -57,13 +59,13 @@ export function makeEvmProviderFromAddress(tokenAddress: string) {
 export function getChainIdFromAddress(tokenAddress: string) {
   switch (tokenAddress) {
     case WETH_TOKEN_INFO.address: {
-      return WORMHOLE_CHAIN_ID_ETHEREUM;
+      return CHAIN_ID_ETH;
     }
     case WMATIC_TOKEN_INFO.address: {
-      return WORMHOLE_CHAIN_ID_POLYGON;
+      return CHAIN_ID_POLYGON;
     }
     case UST_TOKEN_INFO.address: {
-      return WORMHOLE_CHAIN_ID_TERRA;
+      return CHAIN_ID_TERRA;
     }
     default: {
       throw Error("unrecognized evm token address");
@@ -110,16 +112,16 @@ export interface RelayerFee {
 export interface ExactInCrossParameters {
   amountIn: string;
   minAmountOut: string;
-  src: ExactInParameters;
-  dst: ExactInParameters;
+  src: ExactInParameters | undefined;
+  dst: ExactInParameters | undefined;
   relayerFee: RelayerFee;
 }
 
 export interface ExactOutCrossParameters {
   amountOut: string;
   maxAmountIn: string;
-  src: ExactOutParameters;
-  dst: ExactOutParameters;
+  src: ExactOutParameters | undefined;
+  dst: ExactOutParameters | undefined;
   relayerFee: RelayerFee;
 }
 
@@ -132,22 +134,16 @@ export class UniswapToUniswapQuoter {
   srcRouter: UstRouter | EthRouter | MaticRouter;
   dstRouter: UstRouter | EthRouter | MaticRouter;
 
-  constructor() {}
-
-  async initialize(
-    tokenInAddress: string,
-    tokenOutAddress: string
-  ): Promise<void> {
+  async initialize(tokenInAddress: string, tokenOutAddress: string) {
     if (tokenInAddress !== this.tokenInAddress) {
       this.tokenInAddress = tokenInAddress;
       this.srcRouter = await makeRouter(tokenInAddress, UstLocation.Out);
     }
 
-    if (tokenOutAddress != this.tokenOutAddress) {
+    if (tokenOutAddress !== this.tokenOutAddress) {
       this.tokenOutAddress = tokenOutAddress;
       this.dstRouter = await makeRouter(tokenOutAddress, UstLocation.In);
     }
-    return;
   }
 
   async computeAndVerifySrcPoolAddress(): Promise<string> {
@@ -158,7 +154,7 @@ export class UniswapToUniswapQuoter {
     return this.dstRouter.computeAndVerifyPoolAddress();
   }
 
-  computeSwapSlippage(slippage): string {
+  computeSwapSlippage(slippage: string): string {
     if (this.isSrcUst() || this.isDstUst()) {
       return slippage;
     }
@@ -184,7 +180,7 @@ export class UniswapToUniswapQuoter {
   makeSrcExactInParameters(
     amountIn: string,
     minAmountOut: string
-  ): ExactInParameters {
+  ): ExactInParameters | undefined {
     if (this.isSrcUst()) {
       return undefined;
     }
@@ -195,7 +191,7 @@ export class UniswapToUniswapQuoter {
   makeDstExactInParameters(
     amountIn: string,
     minAmountOut: string
-  ): ExactInParameters {
+  ): ExactInParameters | undefined {
     if (this.isDstUst()) {
       return undefined;
     }
@@ -251,9 +247,9 @@ export class UniswapToUniswapQuoter {
   makeSrcExactOutParameters(
     amountOut: string,
     maxAmountIn: string
-  ): ExactOutParameters {
+  ): ExactOutParameters | undefined {
     if (this.isSrcUst()) {
-      return null;
+      return undefined;
     }
     // @ts-ignore
     return makeExactOutParameters(this.srcRouter, amountOut, maxAmountIn);
@@ -262,9 +258,9 @@ export class UniswapToUniswapQuoter {
   makeDstExactOutParameters(
     amountOut: string,
     maxAmountIn: string
-  ): ExactOutParameters {
+  ): ExactOutParameters | undefined {
     if (this.isDstUst()) {
-      return null;
+      return undefined;
     }
     // @ts-ignore
     return makeExactOutParameters(this.dstRouter, amountOut, maxAmountIn);
@@ -337,7 +333,7 @@ export class UniswapToUniswapQuoter {
     return this.tokenOutAddress === TERRA_UST;
   }
 
-  getSrcEvmProvider(): ethers.providers.Provider {
+  getSrcEvmProvider(): ethers.providers.Provider | undefined {
     if (this.isSrcUst()) {
       return undefined;
     }
@@ -345,7 +341,7 @@ export class UniswapToUniswapQuoter {
     return this.srcRouter.getProvider();
   }
 
-  getDstEvmProvider(): ethers.providers.Provider {
+  getDstEvmProvider(): ethers.providers.Provider | undefined {
     if (this.isDstUst()) {
       return undefined;
     }

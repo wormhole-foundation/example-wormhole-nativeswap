@@ -6,7 +6,7 @@ export function addFixedAmounts(
   decimals: number
 ): string {
   const sum = FixedNumber.from(left).addUnsafe(FixedNumber.from(right));
-  return sum.round(this.getDecimals()).toString();
+  return sum.round(decimals).toString();
 }
 
 export function subtractFixedAmounts(

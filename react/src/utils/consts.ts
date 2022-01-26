@@ -1,21 +1,12 @@
 import {
   ChainId,
-  CHAIN_ID_ETH as WORMHOLE_CHAIN_ID_ETHEREUM,
-  CHAIN_ID_POLYGON as WORMHOLE_CHAIN_ID_POLYGON,
-  CHAIN_ID_TERRA as WORMHOLE_CHAIN_ID_TERRA,
+  CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
+  CHAIN_ID_TERRA,
 } from "@certusone/wormhole-sdk";
-//import ethIcon from "../icons/eth.svg";
-//import polygonIcon from "../icons/polygon.svg";
-
-const ethIcon = undefined;
-const polygonIcon = undefined;
-const ustIcon = undefined;
-
-export {
-  WORMHOLE_CHAIN_ID_ETHEREUM,
-  WORMHOLE_CHAIN_ID_POLYGON,
-  WORMHOLE_CHAIN_ID_TERRA,
-};
+import ethIcon from "../icons/eth.svg";
+import polygonIcon from "../icons/polygon.svg";
+import terraIcon from "../icons/terra.svg";
 
 export interface TokenInfo {
   name: string;
@@ -24,13 +15,13 @@ export interface TokenInfo {
   logo: string;
   isNative: boolean;
   maxAmount: number;
-  ustPairedAddress: string;
+  ustPairedAddress: string | undefined;
 }
 
 export const MATIC_TOKEN_INFO: TokenInfo = {
   name: "MATIC",
   address: "0x9c3c9283d3e44854697cd22d3faa240cfb032889", // used to compute quote
-  chainId: WORMHOLE_CHAIN_ID_POLYGON,
+  chainId: CHAIN_ID_POLYGON,
   logo: polygonIcon,
   isNative: true,
   maxAmount: 0.1,
@@ -40,7 +31,7 @@ export const MATIC_TOKEN_INFO: TokenInfo = {
 export const WMATIC_TOKEN_INFO: TokenInfo = {
   name: "WMATIC",
   address: "0x9c3c9283d3e44854697cd22d3faa240cfb032889",
-  chainId: WORMHOLE_CHAIN_ID_POLYGON,
+  chainId: CHAIN_ID_POLYGON,
   logo: polygonIcon,
   isNative: false,
   maxAmount: 0.1,
@@ -50,7 +41,7 @@ export const WMATIC_TOKEN_INFO: TokenInfo = {
 export const ETH_TOKEN_INFO: TokenInfo = {
   name: "ETH",
   address: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6", // used to compute quote
-  chainId: WORMHOLE_CHAIN_ID_ETHEREUM,
+  chainId: CHAIN_ID_ETH,
   logo: ethIcon,
   isNative: true,
   maxAmount: 0.01,
@@ -60,7 +51,7 @@ export const ETH_TOKEN_INFO: TokenInfo = {
 export const WETH_TOKEN_INFO: TokenInfo = {
   name: "WETH",
   address: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6",
-  chainId: WORMHOLE_CHAIN_ID_ETHEREUM,
+  chainId: CHAIN_ID_ETH,
   logo: ethIcon,
   isNative: false,
   maxAmount: 0.01,
@@ -70,9 +61,9 @@ export const WETH_TOKEN_INFO: TokenInfo = {
 export const UST_TOKEN_INFO: TokenInfo = {
   name: "UST",
   address: "uusd",
-  chainId: WORMHOLE_CHAIN_ID_TERRA,
-  logo: ustIcon,
-  isNative: false,
+  chainId: CHAIN_ID_TERRA,
+  logo: terraIcon,
+  isNative: true, // TODO: change?
   maxAmount: 10.0,
   ustPairedAddress: undefined,
 };
@@ -85,18 +76,33 @@ export const TOKEN_INFOS = [
   UST_TOKEN_INFO,
 ];
 
-// evm handling
-export const EVM_ETH_NETWORK_CHAIN_ID = 5;
-export const EVM_POLYGON_NETWORK_CHAIN_ID = 80001;
+export const getSupportedSwaps = (tokenInfo: TokenInfo) => {
+  switch (tokenInfo) {
+    case MATIC_TOKEN_INFO:
+      return [ETH_TOKEN_INFO, UST_TOKEN_INFO];
+    case WMATIC_TOKEN_INFO:
+      return [WETH_TOKEN_INFO];
+    case ETH_TOKEN_INFO:
+      return [MATIC_TOKEN_INFO, UST_TOKEN_INFO];
+    case WETH_TOKEN_INFO:
+      return [WMATIC_TOKEN_INFO];
+    case UST_TOKEN_INFO:
+      return [ETH_TOKEN_INFO, MATIC_TOKEN_INFO];
+  }
+  return [];
+};
+
+export const ETH_NETWORK_CHAIN_ID = 5;
+
+export const POLYGON_NETWORK_CHAIN_ID = 80001;
 
 export const getEvmChainId = (chainId: ChainId) =>
-  chainId === WORMHOLE_CHAIN_ID_ETHEREUM
-    ? EVM_ETH_NETWORK_CHAIN_ID
-    : chainId === WORMHOLE_CHAIN_ID_POLYGON
-    ? EVM_POLYGON_NETWORK_CHAIN_ID
+  chainId === CHAIN_ID_ETH
+    ? ETH_NETWORK_CHAIN_ID
+    : chainId === CHAIN_ID_POLYGON
+    ? POLYGON_NETWORK_CHAIN_ID
     : undefined;
 
-// misc
 export const RELAYER_FEE_UST = "0.25";
 
 export const WORMHOLE_RPC_HOSTS = [
