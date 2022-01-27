@@ -111,6 +111,7 @@ export interface RelayerFee {
 
 export interface ExactInCrossParameters {
   amountIn: string;
+  ustAmountIn: string;
   minAmountOut: string;
   src: ExactInParameters | undefined;
   dst: ExactInParameters | undefined;
@@ -119,6 +120,7 @@ export interface ExactInCrossParameters {
 
 export interface ExactOutCrossParameters {
   amountOut: string;
+  ustAmountIn: string;
   maxAmountIn: string;
   src: ExactOutParameters | undefined;
   dst: ExactOutParameters | undefined;
@@ -236,6 +238,7 @@ export class UniswapToUniswapQuoter {
     // organize parameters
     const params: ExactInCrossParameters = {
       amountIn: amountIn,
+      ustAmountIn: dstAmountInAfterFee,
       minAmountOut: dstMinAmountOut,
       src: this.makeSrcExactInParameters(amountIn, srcMinAmountOut),
       dst: this.makeDstExactInParameters(dstAmountInAfterFee, dstMinAmountOut),
@@ -303,6 +306,7 @@ export class UniswapToUniswapQuoter {
     // organize parameters
     const params: ExactOutCrossParameters = {
       amountOut: amountOut,
+      ustAmountIn: dstMaxAmountIn,
       maxAmountIn: srcMaxAmountIn,
       src: this.makeSrcExactOutParameters(
         srcAmountOutBeforeFee,
