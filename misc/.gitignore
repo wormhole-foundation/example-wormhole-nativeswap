@@ -1,5 +1,5 @@
 node_modules/
 scripts/*.js
 scripts/src/*.js
-./src
+src
 package-lock.json
