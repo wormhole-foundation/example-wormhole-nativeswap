@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "resolveJsonModule": true,
+        "esModuleInterop": true
+    },
+    "include": [
+      "scripts/src/custom.d.ts"
+    ],
+    "files": [
+        "scripts/swap-with-vaa.ts",
+        "scripts/check-ust-quotes.ts"
+    ]
+}
