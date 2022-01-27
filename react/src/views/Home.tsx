@@ -299,7 +299,8 @@ export default function Home() {
           );
           setAmountInUST(
             parseFloat(
-              executor.tokens.dstIn.formatAmount(quote.dst.amountIn)
+              //executor.tokens.dstIn.formatAmount(quote.dst.amountIn)
+              quote.ustAmountIn
             ).toFixed(2)
           );
           setHasQuote(true);
