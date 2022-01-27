@@ -47,6 +47,7 @@ import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.j
 import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
+import { makeErc20Contract } from "../route/evm";
 
 // placeholders
 const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA = "";
@@ -124,7 +125,7 @@ async function evmApproveContractTokenSpend(
   amount: ethers.BigNumber
 ): Promise<TransactionReceipt> {
   // build transaction for token spending
-  const tokenContract = makeEvmToken(provider, tokenAddress).getContract();
+  const tokenContract = await makeErc20Contract(provider, tokenAddress);
   const unsignedTx = await tokenContract.populateTransaction.approve(
     swapContractAddress,
     amount
@@ -446,7 +447,6 @@ export class UniswapToUniswapExecutor {
   cachedExactInParams: ExactInCrossParameters;
   cachedExactOutParams: ExactOutCrossParameters;
   quoteType: QuoteType;
-  tokens: CrossChainSwapTokens;
 
   // swapping
   isNative: boolean;
