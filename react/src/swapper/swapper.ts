@@ -13,7 +13,6 @@ import {
   getSignedVAAWithRetry,
 } from "@certusone/wormhole-sdk";
 import { grpc } from "@improbable-eng/grpc-web";
-import { UniEvmToken } from "../route/uniswap-core";
 import {
   PROTOCOL_UNISWAP_V2,
   // PROTOCOL_UNISWAP_V3,
@@ -120,11 +119,12 @@ function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
 async function evmApproveContractTokenSpend(
   provider: ethers.providers.Provider,
   signer: ethers.Signer,
-  tokenContract: ethers.Contract,
+  tokenAddress: string, //ethers.Contract,
   swapContractAddress: string,
   amount: ethers.BigNumber
 ): Promise<TransactionReceipt> {
   // build transaction for token spending
+  const tokenContract = makeEvmToken(provider, tokenAddress).getContract();
   const unsignedTx = await tokenContract.populateTransaction.approve(
     swapContractAddress,
     amount
@@ -189,7 +189,7 @@ function addressToBytes32(
 async function evmApproveAndSwapExactIn(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
-  srcTokenIn: UniEvmToken,
+  tokenInAddress: string,
   quoteParams: ExactInCrossParameters,
   srcExecutionParams: ExecutionParameters,
   dstExecutionParams: ExecutionParameters,
@@ -254,7 +254,7 @@ async function evmApproveAndSwapExactIn(
     await evmApproveContractTokenSpend(
       srcProvider,
       srcWallet,
-      srcTokenIn.getContract(),
+      tokenInAddress,
       swapContract.address,
       amountIn
     );
@@ -276,7 +276,7 @@ async function evmApproveAndSwapExactIn(
 async function evmApproveAndSwapExactOut(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
-  srcTokenIn: UniEvmToken,
+  tokenInAddress: string,
   quoteParams: ExactOutCrossParameters,
   srcExecutionParams: ExecutionParameters,
   dstExecutionParams: ExecutionParameters,
@@ -341,7 +341,7 @@ async function evmApproveAndSwapExactOut(
     await evmApproveContractTokenSpend(
       srcProvider,
       srcWallet,
-      srcTokenIn.getContract(),
+      tokenInAddress,
       swapContract.address,
       maxAmountIn
     );
@@ -410,13 +410,6 @@ async function swapExactOutFromVaa(
     console.info("swapExactOutFromVaaToken");
     return swapExactOutFromVaaToken(contractWithSigner, signedVaa);
   }
-}
-
-interface CrossChainSwapTokens {
-  srcIn: UniEvmToken;
-  srcOut: UniEvmToken;
-  dstIn: UniEvmToken;
-  dstOut: UniEvmToken;
 }
 
 interface VaaSearchParams {
@@ -583,13 +576,21 @@ export class UniswapToUniswapExecutor {
     return this.quoter.getDstEvmProvider();
   }
 
+  getTokenInAddress(): string {
+    return this.quoter.tokenInAddress;
+  }
+
+  getTokenOutAddress(): string {
+    return this.quoter.tokenOutAddress;
+  }
+
   async evmApproveAndSwapExactIn(
     wallet: ethers.Signer
   ): Promise<TransactionReceipt> {
     return evmApproveAndSwapExactIn(
       this.getSrcEvmProvider(),
       wallet,
-      this.tokens.srcIn,
+      this.getTokenInAddress(),
       this.cachedExactInParams,
       this.srcExecutionParams,
       this.dstExecutionParams,
@@ -603,7 +604,7 @@ export class UniswapToUniswapExecutor {
     return evmApproveAndSwapExactOut(
       this.getSrcEvmProvider(),
       wallet,
-      this.tokens.srcIn,
+      this.getTokenInAddress(),
       this.cachedExactOutParams,
       this.srcExecutionParams,
       this.dstExecutionParams,
