@@ -29,21 +29,11 @@ export async function getEvmGasParametersForContract(
   contract: ethers.Contract
 ): Promise<any> {
   const chainId = await getChainIdFromContract(contract);
-  console.info(`getEvmGasParametersForContract... chainId: ${chainId}`);
 
   if (EVM_EIP1559_CHAIN_IDS.indexOf(chainId) >= 0) {
-    console.info(
-      `eip1559? chainId: ${chainId}, eip1559 chains... ${JSON.stringify(
-        EVM_EIP1559_CHAIN_IDS
-      )}`
-    );
     return CROSSCHAINSWAP_GAS_PARAMETERS_EIP1559;
   }
-  console.info(
-    `not eip1559 chainId: ${chainId}, eip1559 chains... ${JSON.stringify(
-      EVM_EIP1559_CHAIN_IDS
-    )}`
-  );
+
   return CROSSCHAINSWAP_GAS_PARAMETERS_EVM;
 }
 
@@ -62,12 +52,6 @@ export async function evmSwapExactInFromVaaNative(
 ): Promise<TransactionReceipt> {
   const gasParams = await getEvmGasParametersForContract(
     swapContractWithSigner
-  );
-
-  console.info(
-    `evmSwapExactInFromVaaNative... contract: ${
-      swapContractWithSigner.address
-    }, gasParams: ${JSON.stringify(gasParams)}`
   );
 
   const tx = await swapContractWithSigner.recvAndSwapExactNativeIn(
