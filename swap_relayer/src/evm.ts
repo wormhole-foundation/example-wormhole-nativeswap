@@ -300,17 +300,21 @@ async function relayVaaToEvmChain(
       "]"
   );
 
-  if (await isRedeemedOnEvm(t3Payload, tcd, signedVaaArray)) {
+  if (await isRedeemedOnEvm(tcd, signedVaaArray)) {
     logger.info(
       "relayVaaTo" +
         tcd.name +
-        ": contract: [" +
+        ": srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
         ", native: " +
         native +
-        ": already transferred"
+        ": completed: already transferred"
     );
 
     return;
@@ -319,7 +323,11 @@ async function relayVaaToEvmChain(
   logger.info(
     "relayVaaTo" +
       tcd.name +
-      ": contract: [" +
+      ": srcChain: " +
+      t3Payload.sourceChainId +
+      ", targetChain: " +
+      t3Payload.targetChainId +
+      ", contract: [" +
       t3Payload.contractAddress +
       "], exactIn: " +
       exactIn +
@@ -363,27 +371,35 @@ async function relayVaaToEvmChain(
     logger.info(
       "relayVaaTo" +
         tcd.name +
-        ": contract: [" +
+        ": srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
         ", native: " +
         native +
-        ": success, txHash: " +
+        ": completed: success, txHash: " +
         receipt.transactionHash
     );
   } catch (e: any) {
-    if (await isRedeemedOnEvm(t3Payload, tcd, signedVaaArray)) {
+    if (await isRedeemedOnEvm(tcd, signedVaaArray)) {
       logger.info(
         "relayVaaTo" +
           tcd.name +
-          ": contract: [" +
+          ": srcChain: " +
+          t3Payload.sourceChainId +
+          ", targetChain: " +
+          t3Payload.targetChainId +
+          ", contract: [" +
           t3Payload.contractAddress +
           "], exactIn: " +
           exactIn +
           ", native: " +
           native +
-          ": relay failed because the vaa has already been redeemed"
+          ": completed: relay failed because the vaa has already been redeemed"
       );
 
       return;
@@ -403,35 +419,42 @@ async function relayVaaToEvmChain(
     );
   }
 
-  if (await isRedeemedOnEvm(t3Payload, tcd, signedVaaArray)) {
+  if (await isRedeemedOnEvm(tcd, signedVaaArray)) {
     logger.info(
       "relayVaaTo" +
         tcd.name +
-        ": contract: [" +
+        ": srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
         ", native: " +
         native +
-        ": redeem succeeded"
+        ": redeem confirmed"
     );
   } else {
     logger.error(
       "relayVaaTo" +
         tcd.name +
-        ": contract: [" +
+        ": srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
         ", native: " +
         native +
-        ": redeem failed!"
+        ": completed: failed to confirm redeem!"
     );
   }
 }
 
 async function isRedeemedOnEvm(
-  t3Payload: Type3Payload,
   tcd: EvmContractData,
   signedVaaArray: Uint8Array
 ): Promise<boolean> {

@@ -173,21 +173,19 @@ export async function relayVaaToTerra(
   //     "]"
   // );
 
-  // if (await isRedeemedOnTerra(t3Payload, terraContractData, signedVaaArray)) {
+  // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
   //   logger.info(
-  //     "relayVaaToTerra: contract: [" +
+  //     "relayVaaToTerra: srcChain: " +
+  //       t3Payload.sourceChainId +
+  //       ", targetChain: " +
+  //       t3Payload.targetChainId +
+  //       ", contract: [" +
   //       t3Payload.contractAddress +
-  //       "]: already transferred"
+  //       "]: completed: already redeemed"
   //   );
 
   //   return;
   // }
-
-  logger.info(
-    "relayVaaToTerra: contract: [" +
-      t3Payload.contractAddress +
-      "]: submitting redeem request"
-  );
 
   try {
     logger.debug(
@@ -237,13 +235,22 @@ export async function relayVaaToTerra(
       // fee: feeEstimate,
     });
 
-    logger.debug("relayVaaToTerra: submitting transaction");
-    const receipt = await terraContractData.lcdClient.tx.broadcast(tx);
-
     logger.info(
       "relayVaaToTerra: contract: [" +
         t3Payload.contractAddress +
-        "]: success: %o",
+        "]: submitting redeem request"
+    );
+
+    const receipt = await terraContractData.lcdClient.tx.broadcast(tx);
+
+    logger.info(
+      "relayVaaToTerra: srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
+        t3Payload.contractAddress +
+        "]: completed: success: %o",
       receipt
     );
 
@@ -254,43 +261,58 @@ export async function relayVaaToTerra(
     //     receipt.transactionHash
     // );
   } catch (e: any) {
-    // if (await isRedeemedOnTerra(t3Payload, terraContractData, signedVaaArray)) {
+    // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
     //   logger.info(
-    //     "relayVaaToTerra: contract: [" +
+    //     "relayVaaToTerra: srcChain: " +
+    //       t3Payload.sourceChainId +
+    //       ", targetChain: " +
+    //       t3Payload.targetChainId +
+    //       ", contract: [" +
     //       t3Payload.contractAddress +
-    //       "]: relay failed because the vaa has already been redeemed"
+    //       "]: completed: relay failed because the vaa has already been redeemed"
     //   );
 
     //   return;
     // }
 
     logger.error(
-      "relayVaaToTerra: contract: [" +
+      "relayVaaToTerra: srcChain: " +
+        t3Payload.sourceChainId +
+        ", targetChain: " +
+        t3Payload.targetChainId +
+        ", contract: [" +
         t3Payload.contractAddress +
-        "]: transaction failed: %o",
+        "]: completed: transaction failed: %o",
       e
     );
   }
 
-  // if (await isRedeemedOnTerra(t3Payload, terraContractData, signedVaaArray)) {
+  // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
   //   logger.info(
-  //     "relayVaaToTerra: contract: [" +
+  //     "relayVaaToTerra: srcChain: " +
+  //       t3Payload.sourceChainId +
+  //       ", targetChain: " +
+  //       t3Payload.targetChainId +
+  //       ", contract: [" +
   //       t3Payload.contractAddress +
-  //       "]: redeem succeeded"
+  //       "]: redeem confirmed"
   //   );
   // } else {
   //   logger.error(
-  //     "relayVaaToTerra: contract: [" +
+  //     "relayVaaToTerra: srcChain: " +
+  //       t3Payload.sourceChainId +
+  //       ", targetChain: " +
+  //       t3Payload.targetChainId +
+  //       ", contract: [" +
   //       t3Payload.contractAddress +
-  //       "]: redeem failed!"
+  //       "]: completed: failed to confirm redeem!"
   //   );
   // }
 }
 
 async function isRedeemedOnTerra(
-  t3Payload: Type3Payload,
   terraContractData: TerraContractData,
-  signedVaaArray: Uint8Array
+  vaaBytes: string
 ): Promise<boolean> {
   let msg: Terra.MsgExecuteContract = null;
   let sequenceNumber: number = 0;
@@ -300,7 +322,7 @@ async function isRedeemedOnTerra(
       terraContractData.tokenBridgeAddress,
       {
         submit_vaa: {
-          data: fromUint8Array(signedVaaArray),
+          data: Buffer.from(vaaBytes, "hex").toString("base64"),
         },
       }
     );

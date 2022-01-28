@@ -61,6 +61,7 @@ export type OurEnvironment = {
 };
 
 export type Type3Payload = {
+  sourceChainId: number;
   targetChainId: number;
   contractAddress: string;
   relayerFee: ethers.BigNumber;
@@ -224,7 +225,7 @@ async function processVaa(vaaBytes: string) {
 
   let t3Payload: Type3Payload = null;
   try {
-    t3Payload = decodeSignedVAAPayloadType3(parsedVAA);
+    t3Payload = decodeSignedVAAPayloadType3(parsedVAA, parsedVAA.emitter_chain);
   } catch (e) {
     logger.error("failed to parse type 3 vaa: %o", e);
     return;
@@ -239,7 +240,9 @@ async function processVaa(vaaBytes: string) {
           emitter_address +
           "], seqNum: " +
           parsedVAA.sequence +
-          ", contractAddress: [" +
+          ", target: [" +
+          t3Payload.targetChainId +
+          ":" +
           t3Payload.contractAddress +
           "], relayerFee: [" +
           t3Payload.relayerFee +
@@ -259,7 +262,9 @@ async function processVaa(vaaBytes: string) {
           emitter_address +
           "], seqNum: " +
           parsedVAA.sequence +
-          ", contractAddress: [" +
+          ", target: [" +
+          t3Payload.targetChainId +
+          ":" +
           t3Payload.contractAddress +
           "], relayerFee: [" +
           t3Payload.relayerFee +
@@ -284,7 +289,10 @@ async function processVaa(vaaBytes: string) {
   }
 }
 
-function decodeSignedVAAPayloadType3(parsedVAA: any): Type3Payload {
+function decodeSignedVAAPayloadType3(
+  parsedVAA: any,
+  sourceChainId: number
+): Type3Payload {
   const payload = Buffer.from(new Uint8Array(parsedVAA.payload));
   if (payload[0] !== 3) return undefined;
 
@@ -329,6 +337,7 @@ function decodeSignedVAAPayloadType3(parsedVAA: any): Type3Payload {
   }
 
   return {
+    sourceChainId: sourceChainId,
     targetChainId: targetChainId,
     contractAddress: contractAddress,
     relayerFee: ethers.BigNumber.from(payload.slice(101, 101 + 32)),
