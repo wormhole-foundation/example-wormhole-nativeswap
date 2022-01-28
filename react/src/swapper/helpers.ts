@@ -29,6 +29,7 @@ export async function getEvmGasParametersForContract(
   contract: ethers.Contract
 ): Promise<any> {
   const chainId = await getChainIdFromContract(contract);
+  console.info(`getEvmGasParametersForContract... chainId: ${chainId}`);
 
   if (EVM_EIP1559_CHAIN_IDS.indexOf(chainId)) {
     return CROSSCHAINSWAP_GAS_PARAMETERS_EIP1559;
