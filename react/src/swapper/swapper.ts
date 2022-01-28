@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
