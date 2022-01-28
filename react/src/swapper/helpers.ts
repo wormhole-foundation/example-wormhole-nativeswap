@@ -31,7 +31,7 @@ export async function getEvmGasParametersForContract(
   const chainId = await getChainIdFromContract(contract);
   console.info(`getEvmGasParametersForContract... chainId: ${chainId}`);
 
-  if (EVM_EIP1559_CHAIN_IDS.indexOf(chainId)) {
+  if (EVM_EIP1559_CHAIN_IDS.indexOf(chainId) >= 0) {
     console.info(
       `eip1559? chainId: ${chainId}, eip1559 chains... ${JSON.stringify(
         EVM_EIP1559_CHAIN_IDS
