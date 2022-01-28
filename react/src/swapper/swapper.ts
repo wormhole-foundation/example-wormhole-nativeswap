@@ -1,10 +1,11 @@
-//@ts-nocheck
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
   ChainId,
   CHAIN_ID_ETH,
   CHAIN_ID_POLYGON,
+  CHAIN_ID_AVAX,
+  CHAIN_ID_BSC,
   CHAIN_ID_TERRA,
   getEmitterAddressEth,
   hexToUint8Array,
@@ -25,9 +26,13 @@ import {
   TOKEN_BRIDGE_ADDRESS_ETHEREUM,
   TOKEN_BRIDGE_ADDRESS_POLYGON,
   TOKEN_BRIDGE_ADDRESS_TERRA,
+  TOKEN_BRIDGE_ADDRESS_AVALANCHE,
+  TOKEN_BRIDGE_ADDRESS_BSC,
   CORE_BRIDGE_ADDRESS_ETHEREUM,
   CORE_BRIDGE_ADDRESS_POLYGON,
   CORE_BRIDGE_ADDRESS_TERRA,
+  CORE_BRIDGE_ADDRESS_AVALANCHE,
+  CORE_BRIDGE_ADDRESS_BSC,
   WORMHOLE_RPC_HOSTS,
   //ETH_NETWORK_CHAIN_ID,
   //POLYGON_NETWORK_CHAIN_ID,
@@ -37,16 +42,18 @@ import {
   UST_TOKEN_INFO,
 } from "../utils/consts";
 import {
-  CROSSCHAINSWAP_GAS_PARAMETERS,
-  swapExactInFromVaaNative,
-  swapExactInFromVaaToken,
-  swapExactOutFromVaaNative,
-  swapExactOutFromVaaToken,
-} from "./util";
+  evmSwapExactInFromVaaNative,
+  evmSwapExactInFromVaaToken,
+  evmSwapExactOutFromVaaNative,
+  evmSwapExactOutFromVaaToken,
+  getEvmGasParametersForContract,
+} from "./helpers";
 import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
 import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
 import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_AVALANCHE } from "../addresses/fuji";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_BSC } from "../addresses/bsc";
 import { makeErc20Contract } from "../route/evm";
 
 // placeholders
@@ -89,6 +96,28 @@ const EXECUTION_PARAMETERS_POLYGON: ExecutionParameters = {
   },
 };
 
+const EXECUTION_PARAMETERS_AVALANCHE: ExecutionParameters = {
+  crossChainSwap: {
+    address: CROSSCHAINSWAP_CONTRACT_ADDRESS_AVALANCHE,
+  },
+  wormhole: {
+    chainId: CHAIN_ID_AVAX,
+    coreBridgeAddress: CORE_BRIDGE_ADDRESS_AVALANCHE,
+    tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_AVALANCHE,
+  },
+};
+
+const EXECUTION_PARAMETERS_BSC: ExecutionParameters = {
+  crossChainSwap: {
+    address: CROSSCHAINSWAP_CONTRACT_ADDRESS_BSC,
+  },
+  wormhole: {
+    chainId: CHAIN_ID_BSC,
+    coreBridgeAddress: CORE_BRIDGE_ADDRESS_BSC,
+    tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_BSC,
+  },
+};
+
 const EXECUTION_PARAMETERS_TERRA: ExecutionParameters = {
   crossChainSwap: {
     address: CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA,
@@ -107,6 +136,12 @@ function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
     }
     case CHAIN_ID_POLYGON: {
       return EXECUTION_PARAMETERS_POLYGON;
+    }
+    case CHAIN_ID_AVAX: {
+      return EXECUTION_PARAMETERS_AVALANCHE;
+    }
+    case CHAIN_ID_BSC: {
+      return EXECUTION_PARAMETERS_BSC;
     }
     case CHAIN_ID_TERRA: {
       return EXECUTION_PARAMETERS_TERRA;
@@ -219,7 +254,7 @@ async function evmApproveAndSwapExactIn(
     quoteParams.dst.minAmountOut,
     addressToBytes32(address, dstWormholeChainId),
     quoteParams.src.deadline,
-    quoteParams.dst.poolFee || quoteParams.src.poolFee,
+    quoteParams.dst.poolFee || quoteParams.src.poolFee || 0,
   ];
 
   const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
@@ -230,14 +265,10 @@ async function evmApproveAndSwapExactIn(
   );
   const bridgeNonce = 69;
 
+  const gasParams = getEvmGasParametersForContract(swapContract);
   // do the swap
   if (isNative) {
-    const gasPlusValue = {
-      value: amountIn,
-      gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS.gasLimit,
-      maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS.maxFeePerGas,
-      maxPriorityFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS.maxPriorityFeePerGas,
-    };
+    const transactionParams = { value: amountIn, ...gasParams };
 
     console.info("swapExactNativeInAndTransfer");
     const tx = await contractWithSigner.swapExactNativeInAndTransfer(
@@ -247,7 +278,7 @@ async function evmApproveAndSwapExactIn(
       dstWormholeChainId,
       dstContractAddress,
       bridgeNonce,
-      gasPlusValue
+      transactionParams
     );
     return tx.wait();
   } else {
@@ -268,7 +299,7 @@ async function evmApproveAndSwapExactIn(
       dstWormholeChainId,
       dstContractAddress,
       bridgeNonce,
-      CROSSCHAINSWAP_GAS_PARAMETERS
+      gasParams
     );
     return tx.wait();
   }
@@ -307,7 +338,7 @@ async function evmApproveAndSwapExactOut(
     quoteParams.dst.amountOut,
     addressToBytes32(address, dstWormholeChainId),
     quoteParams.src.deadline,
-    quoteParams.dst.poolFee || quoteParams.src.poolFee,
+    quoteParams.dst.poolFee || quoteParams.src.poolFee || 0,
   ];
   const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
 
@@ -317,14 +348,10 @@ async function evmApproveAndSwapExactOut(
   );
   const bridgeNonce = 69;
 
+  const gasParams = getEvmGasParametersForContract(swapContract);
   // do the swap
   if (isNative) {
-    const gasPlusValue = {
-      value: maxAmountIn,
-      gasLimit: CROSSCHAINSWAP_GAS_PARAMETERS.gasLimit,
-      maxFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS.maxFeePerGas,
-      maxPriorityFeePerGas: CROSSCHAINSWAP_GAS_PARAMETERS.maxPriorityFeePerGas,
-    };
+    const gasPlusValue = { value: maxAmountIn, ...gasParams };
 
     console.info("swapExactNativeOutAndTransfer");
     const tx = await contractWithSigner.swapExactNativeOutAndTransfer(
@@ -355,7 +382,7 @@ async function evmApproveAndSwapExactOut(
       dstWormholeChainId,
       dstContractAddress,
       bridgeNonce,
-      CROSSCHAINSWAP_GAS_PARAMETERS
+      gasParams
     );
     return tx.wait();
   }
@@ -379,11 +406,11 @@ async function swapExactInFromVaa(
   const contractWithSigner = swapContract.connect(dstWallet);
 
   if (isNative) {
-    console.info("swapExactInFromVaaNative");
-    return swapExactInFromVaaNative(contractWithSigner, signedVaa);
+    console.info("evmSwapExactInFromVaaNative");
+    return evmSwapExactInFromVaaNative(contractWithSigner, signedVaa);
   } else {
-    console.info("swapExactInFromVaaToken");
-    return swapExactInFromVaaToken(contractWithSigner, signedVaa);
+    console.info("evmSwapExactInFromVaaToken");
+    return evmSwapExactInFromVaaToken(contractWithSigner, signedVaa);
   }
 }
 
@@ -405,11 +432,11 @@ async function swapExactOutFromVaa(
   const contractWithSigner = swapContract.connect(dstWallet);
 
   if (isNative) {
-    console.info("swapExactOutFromVaaNative");
-    return swapExactOutFromVaaNative(contractWithSigner, signedVaa);
+    console.info("evmSwapExactOutFromVaaNative");
+    return evmSwapExactOutFromVaaNative(contractWithSigner, signedVaa);
   } else {
-    console.info("swapExactOutFromVaaToken");
-    return swapExactOutFromVaaToken(contractWithSigner, signedVaa);
+    console.info("evmSwapExactOutFromVaaToken");
+    return evmSwapExactOutFromVaaToken(contractWithSigner, signedVaa);
   }
 }
 

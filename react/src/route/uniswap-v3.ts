@@ -13,11 +13,13 @@ import {
   Trade,
 } from "@uniswap/v3-sdk";
 
-import { UniEvmToken, UniswapRouterCore } from "./uniswap-core";
-import { WETH_TOKEN_INFO, UNISWAP_V3_FACTORY_ADDRESS } from "../utils/consts";
+import { UniswapRouterCore } from "./uniswap-core";
+import { WETH_TOKEN_INFO } from "../utils/consts";
 import { UstLocation } from "./generic";
 
 export const PROTOCOL = "UniswapV3";
+
+const UNISWAP_V3_FACTORY_ADDRESS = "0x1F98431c8aD98523631AE4a59f267346ea31F984";
 
 export class UniswapV3Router extends UniswapRouterCore {
   poolContract: ethers.Contract;

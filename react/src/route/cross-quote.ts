@@ -3,9 +3,13 @@ import { ethers } from "ethers";
 import { QuickswapRouter as MaticRouter } from "./quickswap";
 import { UniswapV3Router as EthRouter } from "./uniswap-v3";
 import { TerraUstTransfer as UstRouter } from "./terra-ust-transfer";
+import { HurricaneswapRouter as AvaxRouter } from "./hurricaneswap";
+import { PancakeswapRouter as BnbRouter } from "./pancakeswap";
 import {
-  WETH_TOKEN_INFO,
-  WMATIC_TOKEN_INFO,
+  ETH_TOKEN_INFO,
+  MATIC_TOKEN_INFO,
+  AVAX_TOKEN_INFO,
+  BNB_TOKEN_INFO,
   UST_TOKEN_INFO,
 } from "../utils/consts";
 import { addFixedAmounts, subtractFixedAmounts } from "../utils/math";
@@ -20,6 +24,8 @@ import {
   ChainId,
   CHAIN_ID_ETH,
   CHAIN_ID_POLYGON,
+  CHAIN_ID_AVAX,
+  CHAIN_ID_BSC,
   CHAIN_ID_TERRA,
 } from "@certusone/wormhole-sdk";
 
@@ -36,17 +42,31 @@ export enum QuoteType {
 
 export function makeEvmProviderFromAddress(tokenAddress: string) {
   switch (tokenAddress) {
-    case WETH_TOKEN_INFO.address: {
+    case ETH_TOKEN_INFO.address: {
       const url = process.env.REACT_APP_GOERLI_PROVIDER;
       if (!url) {
         throw new Error("Could not find REACT_APP_GOERLI_PROVIDER");
       }
       return new ethers.providers.StaticJsonRpcProvider(url);
     }
-    case WMATIC_TOKEN_INFO.address: {
+    case MATIC_TOKEN_INFO.address: {
       const url = process.env.REACT_APP_MUMBAI_PROVIDER;
       if (!url) {
         throw new Error("Could not find REACT_APP_MUMBAI_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
+    }
+    case AVAX_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_FUJI_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_FUJI_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
+    }
+    case BNB_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_BSC_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_BSC_PROVIDER");
       }
       return new ethers.providers.StaticJsonRpcProvider(url);
     }
@@ -58,11 +78,17 @@ export function makeEvmProviderFromAddress(tokenAddress: string) {
 
 export function getChainIdFromAddress(tokenAddress: string) {
   switch (tokenAddress) {
-    case WETH_TOKEN_INFO.address: {
+    case ETH_TOKEN_INFO.address: {
       return CHAIN_ID_ETH;
     }
-    case WMATIC_TOKEN_INFO.address: {
+    case MATIC_TOKEN_INFO.address: {
       return CHAIN_ID_POLYGON;
+    }
+    case AVAX_TOKEN_INFO.address: {
+      return CHAIN_ID_AVAX;
+    }
+    case BNB_TOKEN_INFO.address: {
+      return CHAIN_ID_BSC;
     }
     case UST_TOKEN_INFO.address: {
       return CHAIN_ID_TERRA;
@@ -75,15 +101,27 @@ export function getChainIdFromAddress(tokenAddress: string) {
 
 async function makeRouter(tokenAddress: string, loc: UstLocation) {
   switch (tokenAddress) {
-    case WETH_TOKEN_INFO.address: {
+    case ETH_TOKEN_INFO.address: {
       const provider = makeEvmProviderFromAddress(tokenAddress);
       const router = new EthRouter(provider);
       await router.initialize(loc);
       return router;
     }
-    case WMATIC_TOKEN_INFO.address: {
+    case MATIC_TOKEN_INFO.address: {
       const provider = makeEvmProviderFromAddress(tokenAddress);
       const router = new MaticRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case AVAX_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new AvaxRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case BNB_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new BnbRouter(provider);
       await router.initialize(loc);
       return router;
     }
@@ -133,8 +171,8 @@ export class UniswapToUniswapQuoter {
   tokenOutAddress: string;
 
   // routers
-  srcRouter: UstRouter | EthRouter | MaticRouter;
-  dstRouter: UstRouter | EthRouter | MaticRouter;
+  srcRouter: UstRouter | EthRouter | MaticRouter | AvaxRouter | BnbRouter;
+  dstRouter: UstRouter | EthRouter | MaticRouter | AvaxRouter | BnbRouter;
 
   async initialize(tokenInAddress: string, tokenOutAddress: string) {
     if (tokenInAddress !== this.tokenInAddress) {
