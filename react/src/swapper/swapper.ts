@@ -1,4 +1,4 @@
-//@ts-nocheck
+//@ts-nocheckk
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
@@ -58,7 +58,16 @@ import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_BSC } from "..
 import { makeErc20Contract } from "../route/evm";
 
 // placeholders
-const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA = "";
+const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA =
+  "terra163shc8unyqrndgcldaj2q9kgnqs82v0kgkhynf";
+
+function makeNullSwapPath(): any[] {
+  const zeroBuffer = Buffer.alloc(20);
+  const nullAddress = "0x" + zeroBuffer.toString("hex");
+  return [nullAddress, nullAddress];
+}
+
+const NULL_SWAP_PATH = makeNullSwapPath();
 
 interface SwapContractParameters {
   address: string;
@@ -223,6 +232,48 @@ function addressToBytes32(
   return hexToUint8Array(hexString);
 }
 
+function evmMakeExactInSwapParameters(
+  amountIn: ethers.BigNumber,
+  recipientAddress: string,
+  dstWormholeChainId: ChainId,
+  quoteParams: ExactInCrossParameters
+): any[] {
+  const src = quoteParams.src;
+  const dst = quoteParams.dst;
+
+  if (dst === undefined) {
+    return [
+      amountIn,
+      src.minAmountOut,
+      0,
+      addressToBytes32(recipientAddress, dstWormholeChainId),
+      src.deadline,
+      src.poolFee || 0,
+    ];
+  }
+
+  return [
+    amountIn,
+    src.minAmountOut,
+    dst.minAmountOut,
+    addressToBytes32(recipientAddress, dstWormholeChainId),
+    src.deadline,
+    dst.poolFee || src.poolFee || 0,
+  ];
+}
+
+function makePathArray(
+  quoteParams: ExactInCrossParameters | ExactOutCrossParameters
+): any[] {
+  if (quoteParams.src === undefined) {
+    return NULL_SWAP_PATH.concat(quoteParams.dst.path);
+  } else if (quoteParams.dst === undefined) {
+    return quoteParams.src.path.concat(NULL_SWAP_PATH);
+  } else {
+    return quoteParams.src.path.concat(quoteParams.dst.path);
+  }
+}
+
 async function evmApproveAndSwapExactIn(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
@@ -230,7 +281,8 @@ async function evmApproveAndSwapExactIn(
   quoteParams: ExactInCrossParameters,
   srcExecutionParams: ExecutionParameters,
   dstExecutionParams: ExecutionParameters,
-  isNative: boolean
+  isNative: boolean,
+  recipientAddress: string
 ): Promise<TransactionReceipt> {
   const swapContractParams = srcExecutionParams.crossChainSwap;
 
@@ -244,21 +296,16 @@ async function evmApproveAndSwapExactIn(
 
   // approve and swap this amount
   const amountIn = quoteParams.src.amountIn;
-
-  const address = await srcWallet.getAddress();
-
   const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
 
-  const swapParams = [
+  const swapParams = evmMakeExactInSwapParameters(
     amountIn,
-    quoteParams.src.minAmountOut,
-    quoteParams.dst.minAmountOut,
-    addressToBytes32(address, dstWormholeChainId),
-    quoteParams.src.deadline,
-    quoteParams.dst.poolFee || quoteParams.src.poolFee || 0,
-  ];
+    recipientAddress,
+    dstWormholeChainId,
+    quoteParams
+  );
 
-  const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
+  const pathArray = makePathArray(quoteParams);
 
   const dstContractAddress = addressToBytes32(
     dstExecutionParams.crossChainSwap.address,
@@ -306,6 +353,7 @@ async function evmApproveAndSwapExactIn(
   }
 }
 
+// TODO: fix to resemble ExactIn
 async function evmApproveAndSwapExactOut(
   srcProvider: ethers.providers.Provider,
   srcWallet: ethers.Signer,
@@ -313,11 +361,12 @@ async function evmApproveAndSwapExactOut(
   quoteParams: ExactOutCrossParameters,
   srcExecutionParams: ExecutionParameters,
   dstExecutionParams: ExecutionParameters,
-  isNative: boolean
+  isNative: boolean,
+  recipientAddress: string
 ): Promise<TransactionReceipt> {
   const swapContractParams = srcExecutionParams.crossChainSwap;
 
-  const protocol = quoteParams.src.protocol;
+  const protocol = quoteParams.src?.protocol;
   const swapContract = makeCrossChainSwapEvmContract(
     srcProvider,
     protocol,
@@ -326,22 +375,19 @@ async function evmApproveAndSwapExactOut(
   const contractWithSigner = swapContract.connect(srcWallet);
 
   // approve and swap this amount
-  const amountOut = quoteParams.src.amountOut;
-  const maxAmountIn = quoteParams.src.maxAmountIn;
-
-  const address = await srcWallet.getAddress();
-
+  const amountOut = quoteParams.src?.amountOut;
+  const maxAmountIn = quoteParams.src?.maxAmountIn;
   const dstWormholeChainId = dstExecutionParams.wormhole.chainId;
 
   const swapParams = [
     amountOut,
     maxAmountIn,
     quoteParams.dst.amountOut,
-    addressToBytes32(address, dstWormholeChainId),
+    addressToBytes32(recipientAddress, dstWormholeChainId),
     quoteParams.src.deadline,
     quoteParams.dst.poolFee || quoteParams.src.poolFee || 0,
   ];
-  const pathArray = quoteParams.src.path.concat(quoteParams.dst.path);
+  const pathArray = makePathArray(quoteParams);
 
   const dstContractAddress = addressToBytes32(
     dstExecutionParams.crossChainSwap.address,
@@ -613,30 +659,34 @@ export class UniswapToUniswapExecutor {
   }
 
   async evmApproveAndSwapExactIn(
-    wallet: ethers.Signer
+    srcWallet: ethers.Signer,
+    recipientAddress: string
   ): Promise<TransactionReceipt> {
     return evmApproveAndSwapExactIn(
       this.getSrcEvmProvider(),
-      wallet,
+      srcWallet,
       this.getTokenInAddress(),
       this.cachedExactInParams,
       this.srcExecutionParams,
       this.dstExecutionParams,
-      this.isNative
+      this.isNative,
+      recipientAddress
     );
   }
 
   async evmApproveAndSwapExactOut(
-    wallet: ethers.Signer
+    srcWallet: ethers.Signer,
+    recipientAddress: string
   ): Promise<TransactionReceipt> {
     return evmApproveAndSwapExactOut(
       this.getSrcEvmProvider(),
-      wallet,
+      srcWallet,
       this.getTokenInAddress(),
       this.cachedExactOutParams,
       this.srcExecutionParams,
       this.dstExecutionParams,
-      this.isNative
+      this.isNative,
+      recipientAddress
     );
   }
 
@@ -647,18 +697,27 @@ export class UniswapToUniswapExecutor {
     );
   }
 
-  async evmApproveAndSwap(wallet: ethers.Signer): Promise<TransactionReceipt> {
+  async evmApproveAndSwap(
+    wallet: ethers.Signer,
+    recipientAddress: string
+  ): Promise<TransactionReceipt> {
     const quoteType = this.quoteType;
 
     if (quoteType === QuoteType.ExactIn) {
-      this.srcEvmReceipt = await this.evmApproveAndSwapExactIn(wallet);
+      this.srcEvmReceipt = await this.evmApproveAndSwapExactIn(
+        wallet,
+        recipientAddress
+      );
     } else if (quoteType === QuoteType.ExactOut) {
-      this.srcEvmReceipt = await this.evmApproveAndSwapExactOut(wallet);
+      this.srcEvmReceipt = await this.evmApproveAndSwapExactOut(
+        wallet,
+        recipientAddress
+      );
     } else {
       throw Error("no quote found");
     }
 
-    this.fetchAndSetEmitterAndSequence();
+    this.fetchAndSetEvmEmitterAndSequence();
     return this.srcEvmReceipt;
   }
 

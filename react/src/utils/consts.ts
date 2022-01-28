@@ -190,7 +190,8 @@ export const CORE_BRIDGE_ADDRESS_AVALANCHE =
 export const CORE_BRIDGE_ADDRESS_BSC =
   "0x68605AD7b15c732a30b1BbC62BE8F2A509D74b4D";
 
-export const CORE_BRIDGE_ADDRESS_TERRA = undefined;
+export const CORE_BRIDGE_ADDRESS_TERRA =
+  "terra1pd65m0q9tl3v8znnz5f5ltsfegyzah7g42cx5v";
 
 // token bridge
 export const TOKEN_BRIDGE_ADDRESS_ETHEREUM =
@@ -205,7 +206,8 @@ export const TOKEN_BRIDGE_ADDRESS_BSC =
 export const TOKEN_BRIDGE_ADDRESS_AVALANCHE =
   "0x61E44E506Ca5659E6c0bba9b678586fA2d729756";
 
-export const TOKEN_BRIDGE_ADDRESS_TERRA = undefined;
+export const TOKEN_BRIDGE_ADDRESS_TERRA =
+  "terra1pseddrv0yfsn76u4zxrjmtf45kdlmalswdv39a";
 
 // gas
 export const APPROVAL_GAS_LIMIT = "100000";

@@ -144,11 +144,18 @@ async function swapEverythingExactIn(
   tokenInAddress: string,
   tokenOutAddress: string,
   isNative: boolean,
-  amountIn: string
+  amountIn: string,
+  recipientAddress: string
 ): Promise<void> {
+  const isTerraSrc = tokenInAddress === UST_TOKEN_INFO.address;
+
+  if (isTerraSrc) {
+    throw Error("cannot use terra source yet");
+  }
   // connect src wallet
   const srcWallet = determineWalletFromToken(tokenInAddress);
-  console.info(`wallet pubkey: ${await srcWallet.getAddress()}`);
+  console.info(`sender:    ${await srcWallet.getAddress()}`);
+  console.info(`recipient: ${recipientAddress}`);
 
   // tokens selected, let's initialize
   await swapper.initialize(tokenInAddress, tokenOutAddress, isNative);
@@ -193,9 +200,17 @@ async function swapEverythingExactIn(
   logExactInParameters(swapper.quoter, exactInParameters);
 
   // do the src swap
-  console.info("approveAndSwap");
-  const srcSwapReceipt = await swapper.evmApproveAndSwap(srcWallet);
-  console.info(`src transaction: ${srcSwapReceipt.transactionHash}`);
+  if (isTerraSrc) {
+    // do terra method
+    throw Error("terra src not implemented yet");
+  } else {
+    console.info("approveAndSwap");
+    const srcSwapReceipt = await swapper.evmApproveAndSwap(
+      srcWallet,
+      recipientAddress
+    );
+    console.info(`src transaction: ${srcSwapReceipt.transactionHash}`);
+  }
 
   // do the dst swap after fetching vaa
   // connect dst wallet
@@ -263,7 +278,8 @@ async function swapEverythingExactOut(
   tokenInAddress: string,
   tokenOutAddress: string,
   isNative: boolean,
-  amountOut: string
+  amountOut: string,
+  recipientAddress: string
 ): Promise<void> {
   // connect src wallet
   const srcWallet = determineWalletFromToken(tokenInAddress);
@@ -313,7 +329,10 @@ async function swapEverythingExactOut(
 
   // do the src swap
   console.info("approveAndSwap");
-  const srcSwapReceipt = await swapper.evmApproveAndSwap(srcWallet);
+  const srcSwapReceipt = await swapper.evmApproveAndSwap(
+    srcWallet,
+    recipientAddress
+  );
   console.info(`src transaction: ${srcSwapReceipt.transactionHash}`);
 
   // do the dst swap after fetching vaa
@@ -336,7 +355,11 @@ async function main() {
   swapper.setTransport(NodeHttpTransport());
 
   const tokenIn = ETH_TOKEN_INFO;
-  const tokenOut = AVAX_TOKEN_INFO;
+  //const tokenOut = MATIC_TOKEN_INFO;
+  const tokenOut = UST_TOKEN_INFO;
+
+  //const recipientAddress = "0x4e2dfAD7D7d0076b5A0A41223E4Bee390C33251C";
+  const recipientAddress = "terra1vewnsxcy5fqjslyyy409cw8js550esen38n8ey";
 
   if (testExactIn) {
     console.info(`testing exact in. native=${isNative}`);
@@ -347,17 +370,23 @@ async function main() {
       tokenIn.address,
       tokenOut.address,
       isNative,
-      determineAmountFromToken(tokenIn.address)
+      determineAmountFromToken(tokenIn.address),
+      recipientAddress
     );
 
-    console.info(`${tokenOut.name} -> ${tokenIn.name}`);
-    await swapEverythingExactIn(
-      swapper,
-      tokenOut.address,
-      tokenIn.address,
-      isNative,
-      determineAmountFromToken(tokenOut.address)
-    );
+    if (tokenOut.address === UST_TOKEN_INFO.address) {
+      console.warn("not pinging back");
+    } else {
+      console.info(`${tokenOut.name} -> ${tokenIn.name}`);
+      await swapEverythingExactIn(
+        swapper,
+        tokenOut.address,
+        tokenIn.address,
+        isNative,
+        determineAmountFromToken(tokenOut.address),
+        recipientAddress
+      );
+    }
   } else {
     console.info(`testing exact out. native=${isNative}`);
 
@@ -367,7 +396,8 @@ async function main() {
       tokenIn.address,
       tokenOut.address,
       isNative,
-      determineAmountFromToken(tokenOut.address)
+      determineAmountFromToken(tokenOut.address),
+      recipientAddress
     );
 
     console.info(`${tokenOut.name} -> ${tokenIn.name}`);
@@ -376,7 +406,8 @@ async function main() {
       tokenOut.address,
       tokenIn.address,
       isNative,
-      determineAmountFromToken(tokenIn.address)
+      determineAmountFromToken(tokenIn.address),
+      recipientAddress
     );
   }
 
