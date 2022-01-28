@@ -53,6 +53,10 @@ export async function evmSwapExactInFromVaaNative(
     swapContractWithSigner
   );
 
+  console.info(
+    `evmSwapExactInFromVaaNative... contract: ${swapContractWithSigner.address}, gasParams: ${gasParams}`
+  );
+
   const tx = await swapContractWithSigner.recvAndSwapExactNativeIn(
     signedVaa,
     gasParams
