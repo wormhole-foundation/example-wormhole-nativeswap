@@ -7,20 +7,26 @@ import {
   ExactOutCrossParameters,
   UniswapToUniswapQuoter,
 } from "../src/route/cross-quote";
-
 import { UniswapToUniswapExecutor } from "../src/swapper/swapper";
+import {
+  ETH_TOKEN_INFO,
+  MATIC_TOKEN_INFO,
+  AVAX_TOKEN_INFO,
+  BNB_TOKEN_INFO,
+  UST_TOKEN_INFO,
+} from "../src/utils/consts";
 
 import { makeProvider } from "./src/provider";
 
 require("dotenv").config({ path: ".env" });
 
-// quote using these
-const POLYGON_TOKEN_WMATIC = "0x9c3c9283d3e44854697cd22d3faa240cfb032889";
-const ETHEREUM_TOKEN_WETH = "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6";
-
 // swap related parameters (configurable in UI)
-const SWAP_AMOUNT_IN_WMATIC = "0.0069";
-const SWAP_AMOUNT_IN_WETH = "0.000123";
+const SWAP_AMOUNT_IN_MATIC = "0.0069";
+const SWAP_AMOUNT_IN_ETH = "0.000907";
+const SWAP_AMOUNT_IN_AVAX = "0.0075";
+const SWAP_AMOUNT_IN_BNB = "0.015";
+const SWAP_AMOUNT_IN_UST = "3.40";
+
 const SWAP_DEADLINE = "1800";
 const SWAP_SLIPPAGE = "0.01";
 
@@ -48,12 +54,25 @@ function determineWalletFromToken(tokenAddress: string): ethers.Wallet {
 }
 
 function determineAmountFromToken(tokenAddress: string): string {
-  if (tokenAddress === ETHEREUM_TOKEN_WETH) {
-    return SWAP_AMOUNT_IN_WETH;
-  } else if (tokenAddress === POLYGON_TOKEN_WMATIC) {
-    return SWAP_AMOUNT_IN_WMATIC;
-  } else {
-    throw Error("you suck");
+  switch (tokenAddress) {
+    case ETH_TOKEN_INFO.address: {
+      return SWAP_AMOUNT_IN_ETH;
+    }
+    case MATIC_TOKEN_INFO.address: {
+      return SWAP_AMOUNT_IN_MATIC;
+    }
+    case AVAX_TOKEN_INFO.address: {
+      return SWAP_AMOUNT_IN_AVAX;
+    }
+    case BNB_TOKEN_INFO.address: {
+      return SWAP_AMOUNT_IN_BNB;
+    }
+    case UST_TOKEN_INFO.address: {
+      return SWAP_AMOUNT_IN_UST;
+    }
+    default: {
+      throw Error("you suck");
+    }
   }
 }
 
@@ -61,50 +80,62 @@ function logExactInParameters(
   quoter: UniswapToUniswapQuoter,
   params: ExactInCrossParameters
 ): void {
+  console.info(`amountIn:     ${params.amountIn}`);
+  console.info(`minAmountOut: ${params.minAmountOut}`);
+
   const src = params.src;
-  console.info(`src`);
-  console.info(`  protocol:     ${src.protocol}`);
-  //console.info(`  amountIn:     ${quoter.srcTokenIn.formatAmount(src.amountIn)}`);
-  console.info(
-    `  amountIn:     ${quoter.srcRouter.formatAmountIn(
-      src.amountIn.toString()
-    )}`
-  );
-  console.info(
-    //  `  minAmountOut: ${quoter.srcTokenOut.formatAmount(src.minAmountOut)}`
-    `  minAmountOut: ${quoter.srcRouter.formatAmountOut(
-      src.minAmountOut.toString()
-    )}`
-  );
-  console.info(`  poolFee:      ${src.poolFee}`);
-  console.info(`  deadline:     ${src.deadline.toString()}`);
-  console.info(`  path:         ${src.path}`);
+  if (src === undefined) {
+    console.warn(`  src is undefined (ust?)`);
+  } else {
+    console.info(`src`);
+    console.info(`  protocol:     ${src.protocol}`);
+    //console.info(`  amountIn:     ${quoter.srcTokenIn.formatAmount(src.amountIn)}`);
+    console.info(
+      `  amountIn:     ${quoter.srcRouter.formatAmountIn(
+        src.amountIn.toString()
+      )}`
+    );
+    console.info(
+      //  `  minAmountOut: ${quoter.srcTokenOut.formatAmount(src.minAmountOut)}`
+      `  minAmountOut: ${quoter.srcRouter.formatAmountOut(
+        src.minAmountOut.toString()
+      )}`
+    );
+    console.info(`  poolFee:      ${src.poolFee}`);
+    console.info(`  deadline:     ${src.deadline.toString()}`);
+    console.info(`  path:         ${src.path}`);
+  }
 
   const dst = params.dst;
   console.info(`dst`);
-  console.info(`  protocol:     ${dst.protocol}`);
-  //console.info(`  amountIn:     ${quoter.dstTokenIn.formatAmount(dst.amountIn)}`);
-  console.info(
-    `  amountIn:     ${quoter.dstRouter.formatAmountIn(
-      dst.amountIn.toString()
-    )}`
-  );
-  console.info(
-    //  `  minAmountOut: ${quoter.dstTokenOut.formatAmount(dst.minAmountOut)}`
-    `  minAmountOut: ${quoter.dstRouter.formatAmountOut(
-      dst.minAmountOut.toString()
-    )}`
-  );
-  console.info(`  poolFee:      ${dst.poolFee}`);
-  console.info(`  deadline:     ${dst.deadline.toString()}`);
-  console.info(`  path:         ${dst.path}`);
+  if (dst === undefined) {
+    console.warn(`  dst is undefined (ust?)`);
+  } else {
+    console.info(`  protocol:     ${dst.protocol}`);
+    //console.info(`  amountIn:     ${quoter.dstTokenIn.formatAmount(dst.amountIn)}`);
+    console.info(
+      `  amountIn:     ${quoter.dstRouter.formatAmountIn(
+        dst.amountIn.toString()
+      )}`
+    );
+    console.info(
+      //  `  minAmountOut: ${quoter.dstTokenOut.formatAmount(dst.minAmountOut)}`
+      `  minAmountOut: ${quoter.dstRouter.formatAmountOut(
+        dst.minAmountOut.toString()
+      )}`
+    );
+    console.info(`  poolFee:      ${dst.poolFee}`);
+    console.info(`  deadline:     ${dst.deadline.toString()}`);
+    console.info(`  path:         ${dst.path}`);
 
-  const relayerFee = params.relayerFee;
-  console.info(`relayerFee`);
-  console.info(`  tokenAddress: ${relayerFee.tokenAddress}`);
-  console.info(
-    `  amount:       ${quoter.dstRouter.formatAmountIn(relayerFee.amount)}`
-  );
+    const relayerFee = params.relayerFee;
+    console.info(`relayerFee`);
+    console.info(`  tokenAddress: ${relayerFee.tokenAddress}`);
+    console.info(
+      `  amount:       ${quoter.dstRouter.formatAmountIn(relayerFee.amount)}`
+    );
+  }
+
   return;
 }
 
@@ -122,24 +153,6 @@ async function swapEverythingExactIn(
   // tokens selected, let's initialize
   await swapper.initialize(tokenInAddress, tokenOutAddress, isNative);
   console.info(`quoter initialized`);
-
-  /*
-  const tokens = swapper.getTokens();
-
-  // display tokens on front-end?
-  console.info(
-    `srcTokenIn:  ${tokens.srcIn.getAddress()} (${tokens.srcIn.getDecimals()})`
-  );
-  console.info(
-    `srcTokenOut: ${tokens.srcOut.getAddress()} (${tokens.srcOut.getDecimals()})`
-  );
-  console.info(
-    `dstTokenIn:  ${tokens.dstIn.getAddress()} (${tokens.dstIn.getDecimals()})`
-  );
-  console.info(
-    `dstTokenOut: ${tokens.dstOut.getAddress()} (${tokens.dstOut.getDecimals()})`
-  );
-  */
 
   // verify pool address on src and dst
   await swapper
@@ -260,24 +273,6 @@ async function swapEverythingExactOut(
   await swapper.initialize(tokenInAddress, tokenOutAddress, isNative);
   console.info(`quoter initialized`);
 
-  /*
-  const tokens = swapper.getTokens();
-
-  // display tokens on front-end?
-  console.info(
-    `srcTokenIn:  ${tokens.srcIn.getAddress()} (${tokens.srcIn.getDecimals()})`
-  );
-  console.info(
-    `srcTokenOut: ${tokens.srcOut.getAddress()} (${tokens.srcOut.getDecimals()})`
-  );
-  console.info(
-    `dstTokenIn:  ${tokens.dstIn.getAddress()} (${tokens.dstIn.getDecimals()})`
-  );
-  console.info(
-    `dstTokenOut: ${tokens.dstOut.getAddress()} (${tokens.dstOut.getDecimals()})`
-  );
-  */
-
   // verify pool address on src and dst
   await swapper
     .computeAndVerifySrcPoolAddress()
@@ -340,48 +335,48 @@ async function main() {
   const swapper = new UniswapToUniswapExecutor();
   swapper.setTransport(NodeHttpTransport());
 
-  const tokenInAddress = POLYGON_TOKEN_WMATIC;
-  const tokenOutAddress = ETHEREUM_TOKEN_WETH;
+  const tokenIn = ETH_TOKEN_INFO;
+  const tokenOut = AVAX_TOKEN_INFO;
 
   if (testExactIn) {
     console.info(`testing exact in. native=${isNative}`);
 
-    console.info("wmatic -> weth");
+    console.info(`${tokenIn.name} -> ${tokenOut.name}`);
     await swapEverythingExactIn(
       swapper,
-      tokenInAddress,
-      tokenOutAddress,
+      tokenIn.address,
+      tokenOut.address,
       isNative,
-      determineAmountFromToken(tokenInAddress)
+      determineAmountFromToken(tokenIn.address)
     );
 
-    console.info("weth -> wmatic");
+    console.info(`${tokenOut.name} -> ${tokenIn.name}`);
     await swapEverythingExactIn(
       swapper,
-      tokenOutAddress,
-      tokenInAddress,
+      tokenOut.address,
+      tokenIn.address,
       isNative,
-      determineAmountFromToken(tokenOutAddress)
+      determineAmountFromToken(tokenOut.address)
     );
   } else {
     console.info(`testing exact out. native=${isNative}`);
 
-    console.info("wmatic -> weth");
+    console.info(`${tokenIn.name} -> ${tokenOut.name}`);
     await swapEverythingExactOut(
       swapper,
-      tokenInAddress,
-      tokenOutAddress,
+      tokenIn.address,
+      tokenOut.address,
       isNative,
-      determineAmountFromToken(tokenOutAddress)
+      determineAmountFromToken(tokenOut.address)
     );
 
-    console.info("weth -> wmatic");
+    console.info(`${tokenOut.name} -> ${tokenIn.name}`);
     await swapEverythingExactOut(
       swapper,
-      tokenOutAddress,
-      tokenInAddress,
+      tokenOut.address,
+      tokenIn.address,
       isNative,
-      determineAmountFromToken(tokenInAddress)
+      determineAmountFromToken(tokenIn.address)
     );
   }
 
