@@ -32,7 +32,7 @@
     "cors": "^2.8.5",
     "dotenv": "^10.0.0",
     "ethers": "^5.5.3",
-    "@terra-money/terra.js": "^2.0.14",
+    "@terra-money/terra.js": "^3.0.4",
     "winston": "^3.3.3"
   }
 }
