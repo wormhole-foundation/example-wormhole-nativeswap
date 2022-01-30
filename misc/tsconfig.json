@@ -4,7 +4,6 @@
         "esModuleInterop": true
     },
     "files": [
-        "scripts/swap-with-vaa.ts",
-        "scripts/check-ust-quotes.ts"
+        "scripts/swap-with-vaa.ts"
     ]
 }
