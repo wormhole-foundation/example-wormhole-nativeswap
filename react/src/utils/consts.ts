@@ -7,11 +7,19 @@ import {
   CHAIN_ID_BSC,
 } from "@certusone/wormhole-sdk";
 
+/*
 import ethIcon from "../icons/eth.svg";
 import polygonIcon from "../icons/polygon.svg";
 import terraIcon from "../icons/terra.svg";
 import bscIcon from "../icons/bsc.svg";
 import avaxIcon from "../icons/avax.svg";
+*/
+
+const ethIcon = "";
+const polygonIcon = "";
+const terraIcon = "";
+const bscIcon = "";
+const avaxIcon = "";
 
 export const EVM_POLYGON_NETWORK_CHAIN_ID = 80001;
 export const EVM_ETH_NETWORK_CHAIN_ID = 5;
@@ -23,7 +31,7 @@ export interface TokenInfo {
   address: string;
   chainId: ChainId;
   evmChainId: number | undefined;
-  logo: string;
+  //logo: string;
   maxAmount: number;
   ustPairedAddress: string | undefined;
 }
@@ -33,7 +41,7 @@ export const MATIC_TOKEN_INFO: TokenInfo = {
   address: "0x9c3c9283d3e44854697cd22d3faa240cfb032889",
   chainId: CHAIN_ID_POLYGON,
   evmChainId: EVM_POLYGON_NETWORK_CHAIN_ID,
-  logo: polygonIcon,
+  //logo: polygonIcon,
   maxAmount: 0.1,
   ustPairedAddress: "0xe3a1c77e952b57b5883f6c906fc706fcc7d4392c",
 };
@@ -43,7 +51,7 @@ export const ETH_TOKEN_INFO: TokenInfo = {
   address: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6",
   chainId: CHAIN_ID_ETH,
   evmChainId: EVM_ETH_NETWORK_CHAIN_ID,
-  logo: ethIcon,
+  //logo: ethIcon,
   maxAmount: 0.01,
   ustPairedAddress: "0x36Ed51Afc79619b299b238898E72ce482600568a",
 };
@@ -53,7 +61,7 @@ export const AVAX_TOKEN_INFO: TokenInfo = {
   address: "0x1d308089a2d1ced3f1ce36b1fcaf815b07217be3",
   chainId: CHAIN_ID_AVAX,
   evmChainId: EVM_AVAX_NETWORK_CHAIN_ID,
-  logo: avaxIcon,
+  //logo: avaxIcon,
   maxAmount: 0.01,
   ustPairedAddress: "0xe09ed38e5cd1014444846f62376ac88c5232cde9",
 };
@@ -63,7 +71,7 @@ export const BNB_TOKEN_INFO: TokenInfo = {
   address: "0xae13d989dac2f0debff460ac112a837c89baa7cd",
   chainId: CHAIN_ID_BSC,
   evmChainId: EVM_BSC_NETWORK_CHAIN_ID,
-  logo: bscIcon,
+  //logo: bscIcon,
   maxAmount: 0.01,
   ustPairedAddress: "0x7b8eae1e85c8b189ee653d3f78733f4f788bb2c1",
 };
@@ -73,7 +81,7 @@ export const UST_TOKEN_INFO: TokenInfo = {
   address: "uusd",
   chainId: CHAIN_ID_TERRA,
   evmChainId: undefined,
-  logo: terraIcon,
+  //logo: terraIcon,
   maxAmount: 10.0,
   ustPairedAddress: undefined,
 };
