@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 
-import { WMATIC_TOKEN_INFO } from "../utils/consts";
+import { MATIC_TOKEN_INFO } from "../utils/consts";
 import { UstLocation } from "./generic";
 import { UniswapV2Router } from "./uniswap-v2";
 
@@ -15,7 +15,7 @@ export class QuickswapRouter extends UniswapV2Router {
   }
 
   async initialize(ustLocation: UstLocation): Promise<void> {
-    await super.initializeTokens(WMATIC_TOKEN_INFO, ustLocation);
+    await super.initializeTokens(MATIC_TOKEN_INFO, ustLocation);
     return;
   }
 }

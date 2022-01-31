@@ -1,12 +1,12 @@
 import { ethers } from "ethers";
 
-import { WAVAX_TOKEN_INFO } from "../utils/consts";
+import { AVAX_TOKEN_INFO } from "../utils/consts";
 import { UstLocation } from "./generic";
 import { UniswapV2Router } from "./uniswap-v2";
 
 export { PROTOCOL } from "./uniswap-v2";
 
-const HURRICANESWAP_FACTORY_ADDRESS = null;
+const HURRICANESWAP_FACTORY_ADDRESS = "";
 
 export class HurricaneswapRouter extends UniswapV2Router {
   constructor(provider: ethers.providers.Provider) {
@@ -15,7 +15,7 @@ export class HurricaneswapRouter extends UniswapV2Router {
   }
 
   async initialize(ustLocation: UstLocation): Promise<void> {
-    await super.initializeTokens(WAVAX_TOKEN_INFO, ustLocation);
+    await super.initializeTokens(AVAX_TOKEN_INFO, ustLocation);
     return;
   }
 

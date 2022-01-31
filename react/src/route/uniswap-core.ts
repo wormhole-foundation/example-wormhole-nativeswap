@@ -166,7 +166,7 @@ export abstract class UniswapRouterCore extends RouterCore {
 
     const network = this.network;
 
-    if (ustLocation == UstLocation.Out) {
+    if (ustLocation === UstLocation.Out) {
       [this.tokenIn, this.tokenOut] = await Promise.all([
         makeUniEvmToken(this.provider, network.chainId, tokenInfo.address),
         makeUniEvmToken(

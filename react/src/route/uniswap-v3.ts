@@ -14,7 +14,7 @@ import {
 } from "@uniswap/v3-sdk";
 
 import { UniswapRouterCore } from "./uniswap-core";
-import { WETH_TOKEN_INFO } from "../utils/consts";
+import { ETH_TOKEN_INFO } from "../utils/consts";
 import { UstLocation } from "./generic";
 
 export const PROTOCOL = "UniswapV3";
@@ -34,7 +34,7 @@ export class UniswapV3Router extends UniswapRouterCore {
   }
 
   async initialize(ustLocation: UstLocation): Promise<void> {
-    await this.initializeTokens(WETH_TOKEN_INFO, ustLocation);
+    await this.initializeTokens(ETH_TOKEN_INFO, ustLocation);
     return;
   }
 

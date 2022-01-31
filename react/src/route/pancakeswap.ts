@@ -1,12 +1,12 @@
 import { ethers } from "ethers";
 
-import { WBNB_TOKEN_INFO } from "../utils/consts";
+import { BNB_TOKEN_INFO } from "../utils/consts";
 import { UstLocation } from "./generic";
 import { UniswapV2Router } from "./uniswap-v2";
 
 export { PROTOCOL } from "./uniswap-v2";
 
-const PANCAKESWAP_FACTORY_ADDRESS = null;
+const PANCAKESWAP_FACTORY_ADDRESS = "";
 
 export class PancakeswapRouter extends UniswapV2Router {
   constructor(provider: ethers.providers.Provider) {
@@ -15,7 +15,7 @@ export class PancakeswapRouter extends UniswapV2Router {
   }
 
   async initialize(ustLocation: UstLocation): Promise<void> {
-    await super.initializeTokens(WBNB_TOKEN_INFO, ustLocation);
+    await super.initializeTokens(BNB_TOKEN_INFO, ustLocation);
     return;
   }
 

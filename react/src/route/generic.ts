@@ -1,5 +1,3 @@
-import { FixedNumber } from "ethers";
-
 export enum UstLocation {
   In = 1,
   Out,

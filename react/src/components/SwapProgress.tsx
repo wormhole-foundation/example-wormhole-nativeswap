@@ -1,7 +1,8 @@
-import { ChainId, CHAIN_ID_POLYGON, isEVMChain } from "@certusone/wormhole-sdk";
+import { ChainId, isEVMChain } from "@certusone/wormhole-sdk";
 import { LinearProgress, makeStyles, Typography } from "@material-ui/core";
 import { useEffect, useState } from "react";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
+import { getChainName } from "../utils/consts";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -16,13 +17,11 @@ const useStyles = makeStyles((theme) => ({
 export default function TransactionProgress({
   chainId,
   txBlockNumber,
-  isSourceSwapComplete,
   hasSignedVAA,
   isTargetSwapComplete,
 }: {
   chainId: ChainId;
   txBlockNumber: number | undefined;
-  isSourceSwapComplete: boolean;
   hasSignedVAA: boolean;
   isTargetSwapComplete: boolean;
 }) {
@@ -51,20 +50,21 @@ export default function TransactionProgress({
       };
     }
   }, [hasSignedVAA, chainId, provider, txBlockNumber]);
-  const blockDiff =
+  let blockDiff =
     txBlockNumber !== undefined && txBlockNumber && currentBlock
       ? currentBlock - txBlockNumber
       : 0;
   const expectedBlocks = 15;
+  blockDiff = Math.min(Math.max(blockDiff, 0), expectedBlocks);
   let value;
   let valueBuffer;
   let message;
   if (!hasSignedVAA) {
     value = (blockDiff / expectedBlocks) * 50;
     valueBuffer = 50;
-    message = `Waiting for ${blockDiff} / ${expectedBlocks} confirmations on ${
-      chainId === CHAIN_ID_POLYGON ? "Polygon" : "Ethereum"
-    }...`;
+    message = `Waiting for ${blockDiff} / ${expectedBlocks} confirmations on ${getChainName(
+      chainId
+    )}...`;
   } else if (!isTargetSwapComplete) {
     value = 50;
     valueBuffer = 100;

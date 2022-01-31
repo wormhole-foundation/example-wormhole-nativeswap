@@ -1,4 +1,4 @@
-//@ts-nocheckk
+//@ts-nocheck
 import { ethers } from "ethers";
 import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
@@ -38,8 +38,6 @@ import {
   //ETH_NETWORK_CHAIN_ID,
   //POLYGON_NETWORK_CHAIN_ID,
   //TERRA_NETWORK_CHAIN_ID,
-  WETH_TOKEN_INFO,
-  WMATIC_TOKEN_INFO,
   UST_TOKEN_INFO,
 } from "../utils/consts";
 import {
@@ -493,26 +491,28 @@ interface VaaSearchParams {
 }
 
 export function makeEvmProvider(tokenAddress: string) {
+  let url;
   switch (tokenAddress) {
-    case WETH_TOKEN_INFO.address: {
-      const url = process.env.REACT_APP_GOERLI_PROVIDER;
-      if (!url) {
-        throw new Error("Could not find REACT_APP_GOERLI_PROVIDER");
-      }
-      return new ethers.providers.StaticJsonRpcProvider(url);
-    }
-    case WMATIC_TOKEN_INFO.address: {
-      const url = process.env.REACT_APP_MUMBAI_PROVIDER;
-      if (!url) {
-        throw new Error("Could not find REACT_APP_MUMBAI_PROVIDER");
-      }
-      return new ethers.providers.StaticJsonRpcProvider(url);
-    }
-    default: {
-      console.log("huh?", tokenAddress);
+    case ETH_TOKEN_INFO.address:
+      url = process.env.REACT_APP_GOERLI_PROVIDER;
+      if (!url) throw new Error("REACT_APP_GOERLI_PROVIDER not set");
+      break;
+    case MATIC_TOKEN_INFO.address:
+      url = process.env.REACT_APP_MUMBAI_PROVIDER;
+      if (!url) throw new Error("REACT_APP_MUMBAI_PROVIDER not set");
+      break;
+    case AVAX_TOKEN_INFO.address:
+      url = process.env.REACT_APP_FUJI_PROVIDER;
+      if (!url) throw new Error("REACT_APP_FUJI_PROVIDER not set");
+      break;
+    case BSC_TOKEN_INFO.address:
+      url = process.env.REACT_APP_BSC_PROVIDER;
+      if (!url) throw new Error("REACT_APP_BSC_PROVIDER not set");
+      break;
+    default:
       throw Error("unrecognized token address");
-    }
   }
+  return new ethers.providers.StaticJsonRpcProvider(url);
 }
 
 export class UniswapToUniswapExecutor {

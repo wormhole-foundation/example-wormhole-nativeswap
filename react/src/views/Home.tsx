@@ -39,11 +39,7 @@ import parseError from "../utils/parseError";
 import Settings from "../components/Settings";
 import getIsTransferCompletedEvmWithRetry from "../utils/getIsTransferCompletedWithRetry";
 import CircleLoader from "../components/CircleLoader";
-import {
-  ArrowForward,
-  CheckCircleOutlineRounded,
-  QueueTwoTone,
-} from "@material-ui/icons";
+import { ArrowForward, CheckCircleOutlineRounded } from "@material-ui/icons";
 import SwapProgress from "../components/SwapProgress";
 import Footer from "../components/Footer";
 import TerraWalletKey from "../components/TerraWalletKey";
@@ -163,13 +159,19 @@ const switchEvmProviderNetwork = async (
   }
 };
 
-const ConnectedWalletAddress = ({ chainId }: { chainId: ChainId }) => {
+const ConnectedWalletAddress = ({
+  chainId,
+  prefix,
+}: {
+  chainId: ChainId;
+  prefix: string;
+}) => {
   const { walletAddress } = useIsWalletReady(chainId, false);
   if (walletAddress) {
     const is0x = walletAddress.startsWith("0x");
     return (
       <Typography variant="subtitle2">
-        {walletAddress?.substring(0, is0x ? 6 : 3)}...
+        {prefix} {walletAddress?.substring(0, is0x ? 6 : 3)}...
         {walletAddress?.substring(walletAddress.length - (is0x ? 4 : 3))}
       </Typography>
     );
@@ -190,16 +192,13 @@ const SwapButton = ({
   showLoader: boolean;
   onClick: () => void;
 }) => {
-  const { isReady: isSourceWalletReady, walletAddress: sourceWalletAddress } =
-    useIsWalletReady(source.chainId, false);
-  const { isReady: isTargetWalletReady, walletAddress: targetWalletAddress } =
-    useIsWalletReady(target.chainId, false);
-
-  console.log(
-    "sourceWalletAddress",
-    sourceWalletAddress,
-    "targetWalletAddress",
-    targetWalletAddress
+  const { isReady: isSourceWalletReady } = useIsWalletReady(
+    source.chainId,
+    !disabled
+  );
+  const { isReady: isTargetWalletReady } = useIsWalletReady(
+    target.chainId,
+    !isEVMChain(source.chainId)
   );
 
   if (!isSourceWalletReady) {
@@ -220,6 +219,7 @@ const SwapButton = ({
       <TerraWalletKey />
     ) : null;
   }
+
   return (
     <ButtonWithLoader
       disabled={disabled}
@@ -246,7 +246,7 @@ export default function Home() {
   const [isSwapping, setIsSwapping] = useState(false);
   const [isComputingQuote, setIsComputingQuote] = useState(false);
   const [hasQuote, setHasQuote] = useState(false);
-  const { provider, signer } = useEthereumProvider();
+  const { provider, signer, signerAddress, disconnect } = useEthereumProvider();
   const { enqueueSnackbar } = useSnackbar();
   const [isSourceSwapComplete, setIsSourceSwapComplete] = useState(false);
   const [isTargetSwapComplete, setIsTargetSwapComplete] = useState(false);
@@ -255,8 +255,6 @@ export default function Home() {
   >(undefined);
   const [hasSignedVAA, setHasSignedVAA] = useState(false);
   const [relayerTimeoutString, setRelayerTimeoutString] = useState("");
-
-  const foo = useIsWalletReady(sourceTokenInfo.chainId);
 
   const computeQuote = useCallback(() => {
     (async () => {
@@ -274,7 +272,7 @@ export default function Home() {
           await executor.initialize(
             sourceTokenInfo.address,
             targetTokenInfo.address,
-            sourceTokenInfo.isNative
+            true
           );
           await executor.computeAndVerifySrcPoolAddress().catch((e) => {
             throw new Error("failed to verify source pool address");
@@ -286,23 +284,9 @@ export default function Home() {
           executor.setSlippage((parseFloat(slippage) / 100).toString());
           executor.setRelayerFee(RELAYER_FEE_UST);
           const quote = await executor.computeQuoteExactIn(amountIn);
-          // TODO: FIX
-          if (!quote || !quote.dst) {
-            throw new Error("failed to compute quote");
-          }
           setExecutor(executor);
-          setAmountOut(
-            parseFloat(
-              // executor.tokens.dstOut.formatAmount(quote.dst.minAmountOut)
-              quote.minAmountOut
-            ).toFixed(8)
-          );
-          setAmountInUST(
-            parseFloat(
-              //executor.tokens.dstIn.formatAmount(quote.dst.amountIn)
-              quote.ustAmountIn
-            ).toFixed(2)
-          );
+          setAmountOut(parseFloat(quote.minAmountOut).toFixed(8));
+          setAmountInUST(parseFloat(quote.ustAmountIn).toFixed(2));
           setHasQuote(true);
         }
       } catch (e) {
@@ -352,7 +336,6 @@ export default function Home() {
       const tokenInfo = TOKEN_INFOS.find((x) => x.name === event.target.value);
       if (tokenInfo) {
         const supportedSwaps = getSupportedSwaps(tokenInfo);
-        console.log(supportedSwaps);
         if (supportedSwaps) {
           setSourceTokenInfo(tokenInfo);
           if (!supportedSwaps.find((x) => x.name === targetTokenInfo.name)) {
@@ -378,15 +361,17 @@ export default function Home() {
     setIsSwapping(false);
     setHasQuote(false);
     setIsSourceSwapComplete(false);
+    setHasSignedVAA(false);
     setIsTargetSwapComplete(false);
     setAmountIn("");
     setAmountOut("");
     setSourceTxBlockNumber(undefined);
     setRelayerTimeoutString("");
-  }, []);
+    disconnect();
+  }, [disconnect]);
 
   const handleSwapClick = useCallback(async () => {
-    if (provider && signer && executor) {
+    if (provider && signer && signerAddress && executor) {
       try {
         setIsSwapping(true);
         setIsSourceSwapComplete(false);
@@ -394,9 +379,12 @@ export default function Home() {
         setIsTargetSwapComplete(false);
         setRelayerTimeoutString("");
         await switchEvmProviderNetwork(provider, sourceTokenInfo.chainId);
+        console.log(signerAddress);
 
-        // TODO: fix
-        const sourceReceipt = await executor.evmApproveAndSwap(signer);
+        const sourceReceipt = await executor.evmApproveAndSwap(
+          signer,
+          signerAddress
+        );
         console.info(
           "firstSwapTransactionHash:",
           sourceReceipt.transactionHash
@@ -415,8 +403,8 @@ export default function Home() {
         //  Check if the signedVAA has redeemed by the relayer
         const isCompleted = await getIsTransferCompletedEvmWithRetry(
           executor.dstExecutionParams.wormhole.tokenBridgeAddress,
-          // TODO: fix
-          //@ts-ignore
+          // TODO: fix typescript error
+          // @ts-ignore
           executor.quoter.getDstEvmProvider(),
           vaaBytes,
           // retry for two minutes
@@ -447,6 +435,7 @@ export default function Home() {
   }, [
     provider,
     signer,
+    signerAddress,
     executor,
     enqueueSnackbar,
     sourceTokenInfo,
@@ -461,9 +450,7 @@ export default function Home() {
     <div className={classes.bg}>
       <Container className={classes.centeredContainer} maxWidth="sm">
         <div className={classes.titleBar}></div>
-        <Typography variant="h4" color="textSecondary">
-          Wormhole NativeSwap Demo
-        </Typography>
+        <Typography variant="h4">Wormhole NativeSwap Demo</Typography>
         <div className={classes.spacer} />
         <Paper className={classes.mainPaper}>
           <Collapse in={!isSourceSwapComplete}>
@@ -496,7 +483,10 @@ export default function Home() {
                 color="error"
               >{`The max input amount is ${sourceTokenInfo.maxAmount} ${sourceTokenInfo.name}`}</Typography>
             ) : null}
-            <ConnectedWalletAddress chainId={sourceTokenInfo.chainId} />
+            <ConnectedWalletAddress
+              chainId={sourceTokenInfo.chainId}
+              prefix="From:"
+            />
             <div className={classes.spacer} />
             <TokenSelect
               tokens={getSupportedSwaps(sourceTokenInfo)}
@@ -521,6 +511,7 @@ export default function Home() {
                   ? sourceTokenInfo.chainId
                   : targetTokenInfo.chainId
               }
+              prefix="To:"
             />
             <div className={classes.spacer} />
             <Typography variant="subtitle2">{`Slippage tolerance: ${slippage}%`}</Typography>
@@ -575,7 +566,6 @@ export default function Home() {
                 <SwapProgress
                   chainId={sourceTokenInfo.chainId}
                   txBlockNumber={sourceTxBlockNumber}
-                  isSourceSwapComplete={isSourceSwapComplete}
                   hasSignedVAA={hasSignedVAA}
                   isTargetSwapComplete={isTargetSwapComplete}
                 />
