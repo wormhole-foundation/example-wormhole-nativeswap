@@ -7,20 +7,6 @@ import {
   CHAIN_ID_BSC,
 } from "@certusone/wormhole-sdk";
 
-/*
-import ethIcon from "../icons/eth.svg";
-import polygonIcon from "../icons/polygon.svg";
-import terraIcon from "../icons/terra.svg";
-import bscIcon from "../icons/bsc.svg";
-import avaxIcon from "../icons/avax.svg";
-*/
-
-const ethIcon = "";
-const polygonIcon = "";
-const terraIcon = "";
-const bscIcon = "";
-const avaxIcon = "";
-
 export const EVM_POLYGON_NETWORK_CHAIN_ID = 80001;
 export const EVM_ETH_NETWORK_CHAIN_ID = 5;
 export const EVM_AVAX_NETWORK_CHAIN_ID = 43113;
@@ -31,7 +17,6 @@ export interface TokenInfo {
   address: string;
   chainId: ChainId;
   evmChainId: number | undefined;
-  //logo: string;
   maxAmount: number;
   ustPairedAddress: string | undefined;
 }

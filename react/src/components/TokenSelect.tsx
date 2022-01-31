@@ -5,7 +5,14 @@ import {
   MenuItem,
   TextField,
 } from "@material-ui/core";
-import { TokenInfo } from "../utils/consts";
+import {
+  AVAX_TOKEN_INFO,
+  BNB_TOKEN_INFO,
+  ETH_TOKEN_INFO,
+  MATIC_TOKEN_INFO,
+  TokenInfo,
+  UST_TOKEN_INFO,
+} from "../utils/consts";
 
 import ethIcon from "../icons/eth.svg";
 import polygonIcon from "../icons/polygon.svg";
@@ -29,30 +36,24 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-function getLogo(name: string): string {
-    switch (name) {
-        case "ETH": {
-            return ethIcon;
-        }
-        case "MATIC": {
-            return polygonIcon;
-        }
-        case "UST": {
-            return terraIcon;
-        }
-        case "AVAX": {
-            return avaxIcon;
-        }
-        case "BNB": {
-            return bscIcon;
-        }
-        default: {
-            return "";
-        }
-    }
-}
+const getLogo = (name: string) => {
+  switch (name) {
+    case ETH_TOKEN_INFO.name:
+      return ethIcon;
+    case MATIC_TOKEN_INFO.name:
+      return polygonIcon;
+    case UST_TOKEN_INFO.name:
+      return terraIcon;
+    case AVAX_TOKEN_INFO.name:
+      return avaxIcon;
+    case BNB_TOKEN_INFO.name:
+      return bscIcon;
+    default:
+      return "";
+  }
+};
 
-const createTokenMenuItem = ({ name, logo }: TokenInfo, classes: any) => (
+const createTokenMenuItem = ({ name }: TokenInfo, classes: any) => (
   <MenuItem key={name} value={name}>
     <ListItemIcon className={classes.listItemIcon}>
       <img src={getLogo(name)} alt={name} className={classes.icon} />
