@@ -25,7 +25,7 @@ require("dotenv").config({ path: ".env" });
 const SWAP_AMOUNT_IN_MATIC = "0.0069";
 const SWAP_AMOUNT_IN_ETH = "0.000907";
 const SWAP_AMOUNT_IN_AVAX = "0.0075";
-const SWAP_AMOUNT_IN_BNB = "0.015";
+const SWAP_AMOUNT_IN_BNB = "0.0015";
 const SWAP_AMOUNT_IN_UST = "3.40";
 
 const SWAP_DEADLINE = "1800";
