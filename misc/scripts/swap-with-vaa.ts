@@ -1,3 +1,4 @@
+import yargs from "yargs";
 import { ethers } from "ethers";
 
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
@@ -32,6 +33,34 @@ const SWAP_SLIPPAGE = "0.01";
 
 // token bridge things
 const BRIDGE_RELAYER_FEE_UST = "0.25";
+
+interface Arguments {
+  in: string;
+  out: string;
+}
+
+function parseArgs(): Arguments {
+  const parsed = yargs(process.argv.slice(2))
+    .option("in", {
+      string: true,
+      description: "Name of inbound token",
+      required: true,
+    })
+    .option("out", {
+      string: true,
+      description: "Name of outbound token",
+      required: true,
+    })
+    .help("h")
+    .alias("h", "help").argv;
+
+  const args: Arguments = {
+    in: parsed.in,
+    out: parsed.out,
+  };
+
+  return args;
+}
 
 export function makeEvmWallet(
   provider: ethers.providers.Provider
@@ -347,19 +376,44 @@ async function swapEverythingExactOut(
   return;
 }
 
+function getTokenInfo(name: string) {
+  switch (name) {
+    case "ETH": {
+      return ETH_TOKEN_INFO;
+    }
+    case "MATIC": {
+      return MATIC_TOKEN_INFO;
+    }
+    case "UST": {
+      return UST_TOKEN_INFO;
+    }
+    case "AVAX": {
+      return AVAX_TOKEN_INFO;
+    }
+    case "BNB": {
+      return BNB_TOKEN_INFO;
+    }
+    default: {
+      throw Error("invalid token name");
+    }
+  }
+}
+
 async function main() {
+  const args = parseArgs();
+
   const testExactIn = true;
   const isNative = true;
 
   const swapper = new UniswapToUniswapExecutor();
   swapper.setTransport(NodeHttpTransport());
 
-  const tokenIn = ETH_TOKEN_INFO;
-  //const tokenOut = MATIC_TOKEN_INFO;
-  const tokenOut = UST_TOKEN_INFO;
+  const tokenIn = getTokenInfo(args.in);
+  const tokenOut = getTokenInfo(args.out);
+  //const tokenOut = UST_TOKEN_INFO;
 
-  //const recipientAddress = "0x4e2dfAD7D7d0076b5A0A41223E4Bee390C33251C";
-  const recipientAddress = "terra1vewnsxcy5fqjslyyy409cw8js550esen38n8ey";
+  const recipientAddress = "0x4e2dfAD7D7d0076b5A0A41223E4Bee390C33251C";
+  //const recipientAddress = "terra1vewnsxcy5fqjslyyy409cw8js550esen38n8ey";
 
   if (testExactIn) {
     console.info(`testing exact in. native=${isNative}`);
