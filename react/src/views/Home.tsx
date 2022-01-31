@@ -576,19 +576,31 @@ export default function Home() {
             <Typography variant="subtitle1">{relayerTimeoutString}</Typography>
           )}
           <Typography variant="subtitle2" color="error">
-            WARNING: this is a Testnet release only
+            WARNING: this is a testnet release only
           </Typography>
         </Paper>
         <div className={classes.spacer} />
         <Footer />
         <Link href="https://goerli-faucet.slock.it/" style={{ margin: "5px" }}>
-          Goerli faucet
+          Goerli Faucet
         </Link>
         <Link
           href="https://faucet.polygon.technology/"
           style={{ margin: "5px" }}
         >
-          Mumbai faucet
+          Mumbai Faucet
+        </Link>
+        <Link
+          href="https://faucet.avax-test.network/"
+          style={{ margin: "5px" }}
+        >
+          Fuji Faucet
+        </Link>
+        <Link
+          href="https://testnet.binance.org/faucet-smart/"
+          style={{ margin: "5px" }}
+        >
+          BSC Faucet
         </Link>
         <Link
           href="https://github.com/certusone/wormhole-nativeswap-example/"
