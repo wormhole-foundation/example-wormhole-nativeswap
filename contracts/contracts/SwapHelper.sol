@@ -18,7 +18,7 @@ library SwapHelper {
         uint256 amountIn;
         uint256 amountOutMinimum;
         uint256 targetAmountOutMinimum;
-        address targetChainRecipient;
+        bytes32 targetChainRecipient;
         uint256 deadline;
         uint24 poolFee;
     }
@@ -28,7 +28,7 @@ library SwapHelper {
         uint256 amountOut;
         uint256 amountInMaximum;
         uint256 targetAmountOut;
-        address targetChainRecipient;
+        bytes32 targetChainRecipient;
         uint256 deadline;
         uint24 poolFee;
     }
@@ -75,7 +75,7 @@ library SwapHelper {
         index += 32;
 
         decoded.estimatedAmount = encodedVm.payload.toUint256(index);
-        index += 32;
+        index += 44;
 
         decoded.recipientAddress = encodedVm.payload.toAddress(index);
         index += 20;

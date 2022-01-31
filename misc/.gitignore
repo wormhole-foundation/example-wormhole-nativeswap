@@ -1,0 +1,6 @@
+.env
+node_modules/
+scripts/*.js
+scripts/src/*.js
+src
+package-lock.json

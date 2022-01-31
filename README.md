@@ -6,7 +6,7 @@ Multi-chain native-to-native token swap using existing DEXes.
 
 ### Details
 
-Using liquidity of native vs UST (i.e. the UST highway), one can swap from native A on chain A to native B on chain B. For this specific example, we demonstrate a swap between Polygon (Mumbai testnet) and Ethereum (Goerli testnet) between MATIC and ETH. We wrote example smart contracts to interact with Uniswap V3 and Uniswap V2 forks (QuickSwap in this specific example for Polygon). Any DEX can be used to replace our example as long as the swap for a particular DEX has all of its parameters to perform the swap(s).
+Using liquidity of native vs UST (i.e. the UST highway), one can swap from native A on chain A to native B on chain B. For this specific example, we demonstrate a swap between any combination of ETH (Goerli testnet), AVAX (Fuji testnet), MATIC (Mumbai testnet) and BNB (BSC testnet). We wrote example smart contracts to interact with Uniswap V3 and Uniswap V2 forks. Any DEX can be used to replace our example as long as the swap for a particular DEX has all of its parameters to perform the swap(s).
 
 A protocol that hosts NativeSwap is expected to run its own relayer to enhance its user experience by only requiring a one-click transaction to perform the complete swap. Otherwise the user will have to perform an extra transaction to manually allow the final swap.
 
@@ -49,8 +49,8 @@ cp .env.sample .env
 Then deploy the example contracts:
 
 ```
-./deploy_to_goerli.sh
-./deploy_to_mumbai.sh
+./deploy_v2.sh
+./deploy_v3.sh
 ```
 
 Then change into the react directory, copy sample.env to .env and replace YOUR-PROJECT-ID with your Infura Goerli and Mumbai Project IDs

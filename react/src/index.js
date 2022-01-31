@@ -5,6 +5,7 @@ import ReactDOM from "react-dom";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EthereumProviderProvider } from "./contexts/EthereumProviderContext";
+import { TerraWalletProvider } from "./contexts/TerraWalletContext";
 import { theme } from "./muiTheme";
 
 ReactDOM.render(
@@ -12,9 +13,11 @@ ReactDOM.render(
     <ThemeProvider theme={theme}>
       <CssBaseline>
         <EthereumProviderProvider>
-          <SnackbarProvider maxSnack={3}>
-            <App />
-          </SnackbarProvider>
+          <TerraWalletProvider>
+            <SnackbarProvider maxSnack={3}>
+              <App />
+            </SnackbarProvider>
+          </TerraWalletProvider>
         </EthereumProviderProvider>
       </CssBaseline>
     </ThemeProvider>

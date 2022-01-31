@@ -1,7 +1,10 @@
+//@ts-nocheck
 import { ethers } from "ethers";
 import { CurrencyAmount, Token } from "@uniswap/sdk-core";
 
 import { EvmToken } from "./evm";
+import { RouterCore, UstLocation } from "./generic";
+import { TokenInfo } from "../utils/consts";
 
 export function computeTradeDeadline(deadline: string): ethers.BigNumber {
   return ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(deadline);
@@ -78,46 +81,112 @@ export async function makeUniEvmToken(
   return new UniEvmToken(chainId, erc20);
 }
 
-export abstract class UniswapRouterCore {
+function stringToBigNumber(value: string): ethers.BigNumber {
+  return ethers.BigNumber.from(value);
+}
+
+export interface ExactInParameters {
+  protocol: string;
+  amountIn: ethers.BigNumber;
+  minAmountOut: ethers.BigNumber;
+  deadline: ethers.BigNumber;
+  poolFee: string;
+  path: [string, string];
+}
+
+export interface ExactOutParameters {
+  protocol: string;
+  amountOut: ethers.BigNumber;
+  maxAmountIn: ethers.BigNumber;
+  deadline: ethers.BigNumber;
+  poolFee: string;
+  path: [string, string];
+}
+
+export function makeExactInParameters(
+  router: UniswapRouterCore,
+  amountIn: string,
+  minAmountOut: string
+): ExactInParameters {
+  const params: ExactInParameters = {
+    protocol: router.getProtocol(),
+    amountIn: router.tokenIn.computeUnitAmount(amountIn),
+    minAmountOut: router.tokenOut.computeUnitAmount(minAmountOut),
+    poolFee: router.getPoolFee(),
+    deadline: router.getTradeDeadline(),
+    path: [router.tokenIn.getAddress(), router.tokenOut.getAddress()],
+  };
+  return params;
+}
+
+export function makeExactOutParameters(
+  router: UniswapRouterCore,
+  amountOut: string,
+  maxAmountIn: string
+): ExactOutParameters {
+  const params: ExactOutParameters = {
+    protocol: router.getProtocol(),
+    amountOut: router.tokenOut.computeUnitAmount(amountOut),
+    maxAmountIn: router.tokenIn.computeUnitAmount(maxAmountIn),
+    poolFee: router.getPoolFee(),
+    deadline: router.getTradeDeadline(),
+    path: [router.tokenIn.getAddress(), router.tokenOut.getAddress()],
+  };
+  return params;
+}
+
+export abstract class UniswapRouterCore extends RouterCore {
   provider: ethers.providers.Provider;
+  network: ethers.providers.Network;
+
+  // wormhole
+  chainId: number;
+
+  // tokens
+  tokenIn: UniEvmToken;
+  tokenOut: UniEvmToken;
 
   // params
   deadline: string = "";
 
   constructor(provider: ethers.providers.Provider) {
+    super();
     this.provider = provider;
   }
 
-  public async makeToken(tokenAddress: string): Promise<UniEvmToken> {
-    const network = await this.provider.getNetwork();
-    return makeUniEvmToken(this.provider, network.chainId, tokenAddress);
+  public getProvider(): ethers.providers.Provider {
+    return this.provider;
   }
 
-  abstract computePoolAddress(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken
-  ): string;
+  public async initializeTokens(
+    tokenInfo: TokenInfo,
+    ustLocation: UstLocation
+  ): Promise<void> {
+    this.network = await this.provider.getNetwork();
 
-  abstract computeAndVerifyPoolAddress(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken
-  ): Promise<string>;
+    const network = this.network;
 
-  abstract fetchQuoteAmountOut(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
-    amountOut: string,
-    slippage: string
-  ): Promise<ethers.BigNumber>;
-
-  abstract fetchQuoteAmountIn(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
-    amountOut: string,
-    slippage: string
-  ): Promise<ethers.BigNumber>;
-
-  abstract getProtocol(): string;
+    if (ustLocation === UstLocation.Out) {
+      [this.tokenIn, this.tokenOut] = await Promise.all([
+        makeUniEvmToken(this.provider, network.chainId, tokenInfo.address),
+        makeUniEvmToken(
+          this.provider,
+          network.chainId,
+          tokenInfo.ustPairedAddress
+        ),
+      ]);
+    } else {
+      [this.tokenIn, this.tokenOut] = await Promise.all([
+        makeUniEvmToken(
+          this.provider,
+          network.chainId,
+          tokenInfo.ustPairedAddress
+        ),
+        makeUniEvmToken(this.provider, network.chainId, tokenInfo.address),
+      ]);
+    }
+    return;
+  }
 
   public getPoolFee(): string {
     return "";
@@ -130,4 +199,36 @@ export abstract class UniswapRouterCore {
   public getTradeDeadline(): ethers.BigNumber {
     return computeTradeDeadline(this.deadline);
   }
+
+  /*
+  public computeUnitAmountIn(amount: string): string {
+    return this.tokenIn.computeUnitAmount(amount).toString();
+  }
+  */
+
+  public computeUnitAmountOut(amount: string): string {
+    return this.tokenOut.computeUnitAmount(amount).toString();
+  }
+
+  public formatAmountIn(amount: string): string {
+    return this.tokenIn.formatAmount(stringToBigNumber(amount));
+  }
+
+  public formatAmountOut(amount: string): string {
+    return this.tokenOut.formatAmount(stringToBigNumber(amount));
+  }
+
+  public getTokenInDecimals(): number {
+    return this.tokenIn.getDecimals();
+  }
+
+  public getTokenOutDecimals(): number {
+    return this.tokenOut.getDecimals();
+  }
+
+  public getTokenOutAddress(): string {
+    return this.tokenOut.getAddress();
+  }
+
+  abstract getProtocol(): string;
 }

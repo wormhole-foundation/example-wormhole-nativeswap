@@ -1,11 +1,9 @@
-import { ChainId, CHAIN_ID_SOLANA, isEVMChain } from "@certusone/wormhole-sdk";
+import { ChainId, CHAIN_ID_TERRA, isEVMChain } from "@certusone/wormhole-sdk";
 import { hexlify, hexStripZeros } from "@ethersproject/bytes";
+import { useConnectedWallet } from "@terra-money/wallet-provider";
 import { useCallback, useMemo } from "react";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
-// import { useSolanaWallet } from "../contexts/SolanaWalletContext";
 import { getEvmChainId } from "../utils/consts";
-
-const CLUSTER = "testnet"; // TODO: change this
 
 const createWalletStatus = (
   isReady: boolean,
@@ -29,8 +27,8 @@ function useIsWalletReady(
   forceNetworkSwitch: () => void;
 } {
   const autoSwitch = enableNetworkAutoswitch;
-  // const solanaWallet = useSolanaWallet();
-  // const solPK = solanaWallet?.publicKey;
+  const terraWallet = useConnectedWallet();
+  const hasTerraWallet = !!terraWallet;
   const {
     provider,
     signerAddress,
@@ -54,14 +52,19 @@ function useIsWalletReady(
   }, [provider, correctEvmNetwork, chainId]);
 
   return useMemo(() => {
-    //if (chainId === CHAIN_ID_SOLANA && solPK) {
-    //  return createWalletStatus(
-    //    true,
-    //    undefined,
-    //    forceNetworkSwitch,
-    //    solPK.toString()
-    //  );
-    //}
+    if (
+      chainId === CHAIN_ID_TERRA &&
+      hasTerraWallet &&
+      terraWallet?.walletAddress
+    ) {
+      // TODO: terraWallet does not update on wallet changes
+      return createWalletStatus(
+        true,
+        undefined,
+        forceNetworkSwitch,
+        terraWallet.walletAddress
+      );
+    }
     if (isEVMChain(chainId) && hasEthInfo && signerAddress) {
       if (hasCorrectEvmNetwork) {
         return createWalletStatus(
@@ -76,7 +79,7 @@ function useIsWalletReady(
         }
         return createWalletStatus(
           false,
-          `Wallet is not connected to ${CLUSTER}. Expected Chain ID: ${correctEvmNetwork}`,
+          `Wallet is not connected to testnet. Expected Chain ID: ${correctEvmNetwork}`,
           forceNetworkSwitch,
           undefined
         );
@@ -93,12 +96,13 @@ function useIsWalletReady(
     chainId,
     autoSwitch,
     forceNetworkSwitch,
-    // solPK,
+    hasTerraWallet,
     hasEthInfo,
     correctEvmNetwork,
     hasCorrectEvmNetwork,
     provider,
     signerAddress,
+    terraWallet,
   ]);
 }
 

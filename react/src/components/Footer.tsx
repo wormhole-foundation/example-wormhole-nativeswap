@@ -5,7 +5,7 @@ import Github from "../icons/Github.svg";
 import Medium from "../icons/Medium.svg";
 import Telegram from "../icons/Telegram.svg";
 import Twitter from "../icons/Twitter.svg";
-import Wormhole from "../icons/wormhole-network.svg";
+import Wormhole from "../icons/wormhole_logo.svg";
 
 const useStyles = makeStyles((theme) => ({
   footer: {
@@ -19,7 +19,6 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   builtWithContainer: {
-    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     opacity: 0.5,
@@ -27,7 +26,7 @@ const useStyles = makeStyles((theme) => ({
   },
   wormholeIcon: {
     height: 48,
-    width: 48,
+    width: 192,
     filter: "contrast(0)",
     transition: "filter 0.5s",
     "&:hover": {
@@ -92,24 +91,18 @@ export default function Footer() {
           <img src={Twitter} alt="Twitter" />
         </IconButton>
       </div>
+      <div>
+        <a
+          href="https://wormholenetwork.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img src={Wormhole} alt="Wormhole" className={classes.wormholeIcon} />
+        </a>
+      </div>
       <div className={classes.builtWithContainer}>
-        <div>
-          <a
-            href="https://wormholenetwork.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={Wormhole}
-              alt="Wormhole"
-              className={classes.wormholeIcon}
-            />
-          </a>
-        </div>
-        <div>
-          <Typography variant="body2">Open Source</Typography>
-          <Typography variant="body2">Built with &#10084;</Typography>
-        </div>
+        <Typography variant="body2">Open Source</Typography>
+        <Typography variant="body2">Built with &#10084;</Typography>
       </div>
     </footer>
   );

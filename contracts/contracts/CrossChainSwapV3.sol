@@ -48,7 +48,8 @@ contract CrossChainSwapV3 {
     uint8 public immutable typeExactOut = 2;
     uint8 public immutable typeNativeSwap = 1;
     uint8 public immutable typeTokenSwap = 2;
-    uint16 public immutable expectedVaaLength = 262;
+    uint16 public immutable expectedVaaLength = 274;
+    uint8 public immutable terraChainId = 3;
     IUniswapRouter public immutable swapRouter;
     address public immutable feeTokenAddress;
     address public immutable tokenBridgeAddress;
@@ -403,17 +404,26 @@ contract CrossChainSwapV3 {
             typeNativeSwap
         );
 
-        // encode payload for second swap
-        bytes memory payload = abi.encodePacked(
-            swapParams.targetAmountOutMinimum,
-            swapParams.targetChainRecipient,
-            path[2],
-            path[3],
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeExactIn,
-            typeNativeSwap
-        );
+        // create payload variable
+        bytes memory payload;
+
+        // UST is native to Terra - no need for swap instructions
+        if (targetChainId == terraChainId) { 
+            payload = abi.encodePacked(
+                swapParams.targetChainRecipient
+            );
+        } else {  
+            payload = abi.encodePacked(
+                swapParams.targetAmountOutMinimum,
+                swapParams.targetChainRecipient,
+                path[2],
+                path[3],
+                swapParams.deadline,
+                swapParams.poolFee,
+                typeExactIn,
+                typeNativeSwap
+            );  
+        }
 
         // approve token bridge to spend feeTokens (UST)
         TransferHelper.safeApprove(
@@ -788,17 +798,26 @@ contract CrossChainSwapV3 {
             typeNativeSwap
         );
 
-        // encode payload for second swap
-        bytes memory payload = abi.encodePacked(
-            swapParams.targetAmountOut,
-            swapParams.targetChainRecipient,
-            path[2],
-            path[3],
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeExactOut,
-            typeNativeSwap
-        );
+        // create payload variable
+        bytes memory payload;
+
+        // UST is native to Terra - no need for swap instructions
+        if (targetChainId == terraChainId) { 
+            payload = abi.encodePacked(
+                swapParams.targetChainRecipient
+            );
+        } else {  
+            payload = abi.encodePacked(
+                swapParams.targetAmountOut,
+                swapParams.targetChainRecipient,
+                path[2],
+                path[3],
+                swapParams.deadline,
+                swapParams.poolFee,
+                typeExactOut,
+                typeNativeSwap
+            );  
+        }
 
         // approve token bridge to spend feeTokens (UST)
         TransferHelper.safeApprove(

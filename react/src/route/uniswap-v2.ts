@@ -3,11 +3,19 @@ import { CurrencyAmount, TradeType } from "@uniswap/sdk-core";
 import { abi as IUniswapV2PairABI } from "@uniswap/v2-core/build/UniswapV2Pair.json";
 import { computePairAddress, Pair, Route, Trade } from "@uniswap/v2-sdk";
 
-import { UniEvmToken, UniswapRouterCore } from "./uniswap-core";
+import { UniswapRouterCore } from "./uniswap-core";
 
 export const PROTOCOL = "UniswapV2";
 
-export class SingleAmmSwapRouter extends UniswapRouterCore {
+// uniswap v3 (ethereum)
+//export const UNISWAP_V3_FACTORY_ADDRESS = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
+//export const UNISWAP_V3_ROUTER_ADDRESS = '0xE592427A0AEce92De3Edee1F18E0157C05861564';
+
+// quickswap (polygon)
+export const QUICKSWAP_V2_ROUTER_ADDRESS =
+  "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff";
+
+export class UniswapV2Router extends UniswapRouterCore {
   factoryAddress: string;
   pairContract: ethers.Contract;
   pair: Pair;
@@ -17,23 +25,20 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     return;
   }
 
-  computePoolAddress(tokenIn: UniEvmToken, tokenOut: UniEvmToken): string {
+  computePoolAddress(): string {
     if (this.factoryAddress === undefined) {
       throw Error("factoryAddress is undefined. use setFactoryAddress");
     }
 
     return computePairAddress({
       factoryAddress: this.factoryAddress,
-      tokenA: tokenIn.getUniToken(),
-      tokenB: tokenOut.getUniToken(),
+      tokenA: this.tokenIn.getUniToken(),
+      tokenB: this.tokenOut.getUniToken(),
     });
   }
 
-  async computeAndVerifyPoolAddress(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken
-  ): Promise<string> {
-    const pairAddress = this.computePoolAddress(tokenIn, tokenOut);
+  async computeAndVerifyPoolAddress(): Promise<string> {
+    const pairAddress = this.computePoolAddress();
 
     // verify by attempting to call factory()
     const poolContract = new ethers.Contract(
@@ -46,8 +51,8 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     return pairAddress;
   }
 
-  async createPool(tokenIn: UniEvmToken, tokenOut: UniEvmToken): Promise<Pair> {
-    const pairAddress = this.computePoolAddress(tokenIn, tokenOut);
+  async createPool(): Promise<Pair> {
+    const pairAddress = this.computePoolAddress();
 
     const pairContract = new ethers.Contract(
       pairAddress,
@@ -63,6 +68,9 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     const reserve0 = reserves._reserve0.toString();
     const reserve1 = reserves._reserve1.toString();
 
+    const tokenIn = this.tokenIn;
+    const tokenOut = this.tokenOut;
+
     if (token0.toLowerCase() === tokenIn.getAddress().toLowerCase()) {
       return new Pair(
         CurrencyAmount.fromRawAmount(tokenIn.getUniToken(), reserve0),
@@ -76,15 +84,13 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
     );
   }
 
-  async fetchQuoteAmountOut(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
-    amountIn: string,
-    slippage: string
-  ): Promise<ethers.BigNumber> {
+  async fetchExactInQuote(amountIn: string, slippage: string): Promise<string> {
     // create pool
-    const pair = await this.createPool(tokenIn, tokenOut);
+    const pair = await this.createPool();
+
     // let's get that quote
+    const tokenIn = this.tokenIn;
+    const tokenOut = this.tokenOut;
 
     const route = new Route(
       [pair],
@@ -108,18 +114,24 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
       .mulUnsafe(slippageMultiplier)
       .round(decimals);
 
-    return tokenOut.computeUnitAmount(minAmountOutWithSlippage.toString());
+    /*
+    return tokenOut
+      .computeUnitAmount(minAmountOutWithSlippage.toString())
+      .toString();
+      */
+    return minAmountOutWithSlippage.toString();
   }
 
-  async fetchQuoteAmountIn(
-    tokenIn: UniEvmToken,
-    tokenOut: UniEvmToken,
+  async fetchExactOutQuote(
     amountOut: string,
     slippage: string
-  ): Promise<ethers.BigNumber> {
+  ): Promise<string> {
     // create pool
-    const pair = await this.createPool(tokenIn, tokenOut);
+    const pair = await this.createPool();
+
     // let's get that quote
+    const tokenIn = this.tokenIn;
+    const tokenOut = this.tokenOut;
 
     const route = new Route(
       [pair],
@@ -142,7 +154,12 @@ export class SingleAmmSwapRouter extends UniswapRouterCore {
       .divUnsafe(slippageDivisor)
       .round(decimals);
 
-    return tokenIn.computeUnitAmount(maxAmountInWithSlippage.toString());
+    /*
+    return tokenIn
+      .computeUnitAmount(maxAmountInWithSlippage.toString())
+      .toString();
+      */
+    return maxAmountInWithSlippage.toString();
   }
 
   getProtocol(): string {

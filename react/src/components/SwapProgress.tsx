@@ -1,7 +1,8 @@
-import { ChainId, CHAIN_ID_POLYGON, isEVMChain } from "@certusone/wormhole-sdk";
+import { ChainId, isEVMChain } from "@certusone/wormhole-sdk";
 import { LinearProgress, makeStyles, Typography } from "@material-ui/core";
 import { useEffect, useState } from "react";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
+import { getChainName } from "../utils/consts";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -16,17 +17,19 @@ const useStyles = makeStyles((theme) => ({
 export default function TransactionProgress({
   chainId,
   txBlockNumber,
-  step,
+  hasSignedVAA,
+  isTargetSwapComplete,
 }: {
   chainId: ChainId;
   txBlockNumber: number | undefined;
-  step: number;
+  hasSignedVAA: boolean;
+  isTargetSwapComplete: boolean;
 }) {
   const classes = useStyles();
   const { provider } = useEthereumProvider();
   const [currentBlock, setCurrentBlock] = useState(0);
   useEffect(() => {
-    if (step !== 1 || !txBlockNumber) return;
+    if (hasSignedVAA || !txBlockNumber) return;
     if (isEVMChain(chainId) && provider) {
       let cancelled = false;
       (async () => {
@@ -46,33 +49,30 @@ export default function TransactionProgress({
         cancelled = true;
       };
     }
-  }, [step, chainId, provider, txBlockNumber]);
-  const blockDiff =
+  }, [hasSignedVAA, chainId, provider, txBlockNumber]);
+  let blockDiff =
     txBlockNumber !== undefined && txBlockNumber && currentBlock
       ? currentBlock - txBlockNumber
       : 0;
   const expectedBlocks = 15;
+  blockDiff = Math.min(Math.max(blockDiff, 0), expectedBlocks);
   let value;
   let valueBuffer;
   let message;
-  switch (step) {
-    case 1:
-      value = (blockDiff / expectedBlocks) * 50;
-      valueBuffer = 50;
-      message = `Waiting for ${blockDiff} / ${expectedBlocks} confirmations on ${
-        chainId === CHAIN_ID_POLYGON ? "Polygon" : "Ethereum"
-      }...`;
-      break;
-    case 2:
-      value = 50;
-      valueBuffer = 100;
-      message = "Waiting for relayer to complete swap...";
-      break;
-    case 3:
-      value = 100;
-      valueBuffer = 100;
-      message = "";
-      break;
+  if (!hasSignedVAA) {
+    value = (blockDiff / expectedBlocks) * 50;
+    valueBuffer = 50;
+    message = `Waiting for ${blockDiff} / ${expectedBlocks} confirmations on ${getChainName(
+      chainId
+    )}...`;
+  } else if (!isTargetSwapComplete) {
+    value = 50;
+    valueBuffer = 100;
+    message = "Waiting for relayer to complete swap...";
+  } else {
+    value = 100;
+    valueBuffer = 100;
+    message = "Success!";
   }
   return (
     <div className={classes.root}>

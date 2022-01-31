@@ -1,41 +1,132 @@
 import { ethers } from "ethers";
-import { UniEvmToken } from "./uniswap-core";
-import { QuickswapRouter } from "./quickswap";
-import { SingleAmmSwapRouter as UniswapV3Router } from "./uniswap-v3";
+
+import { QuickswapRouter as MaticRouter } from "./quickswap";
+import { UniswapV3Router as EthRouter } from "./uniswap-v3";
+import { TerraUstTransfer as UstRouter } from "./terra-ust-transfer";
+import { HurricaneswapRouter as AvaxRouter } from "./hurricaneswap";
+import { PancakeswapRouter as BnbRouter } from "./pancakeswap";
 import {
-  ETH_NETWORK_CHAIN_ID,
-  POLYGON_NETWORK_CHAIN_ID,
+  ETH_TOKEN_INFO,
+  MATIC_TOKEN_INFO,
+  AVAX_TOKEN_INFO,
+  BNB_TOKEN_INFO,
+  UST_TOKEN_INFO,
 } from "../utils/consts";
+import { addFixedAmounts, subtractFixedAmounts } from "../utils/math";
+import { UstLocation } from "./generic";
+import {
+  ExactInParameters,
+  ExactOutParameters,
+  makeExactInParameters,
+  makeExactOutParameters,
+} from "./uniswap-core";
+import {
+  ChainId,
+  CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
+  CHAIN_ID_AVAX,
+  CHAIN_ID_BSC,
+  CHAIN_ID_TERRA,
+} from "@certusone/wormhole-sdk";
 
 export { PROTOCOL as PROTOCOL_UNISWAP_V2 } from "./uniswap-v2";
 export { PROTOCOL as PROTOCOL_UNISWAP_V3 } from "./uniswap-v3";
+export { PROTOCOL as PROTOCOL_TERRA_UST_TRANSFER } from "./terra-ust-transfer";
+
+export const TERRA_UST = UST_TOKEN_INFO.address;
 
 export enum QuoteType {
   ExactIn = 1,
   ExactOut,
 }
 
-function makeRouter(provider: ethers.providers.Provider, id: number) {
-  switch (id) {
-    case ETH_NETWORK_CHAIN_ID: {
-      return new UniswapV3Router(provider);
+export function makeEvmProviderFromAddress(tokenAddress: string) {
+  switch (tokenAddress) {
+    case ETH_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_GOERLI_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_GOERLI_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
     }
-    case POLYGON_NETWORK_CHAIN_ID: {
-      return new QuickswapRouter(provider);
+    case MATIC_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_MUMBAI_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_MUMBAI_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
+    }
+    case AVAX_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_FUJI_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_FUJI_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
+    }
+    case BNB_TOKEN_INFO.address: {
+      const url = process.env.REACT_APP_BSC_PROVIDER;
+      if (!url) {
+        throw new Error("Could not find REACT_APP_BSC_PROVIDER");
+      }
+      return new ethers.providers.StaticJsonRpcProvider(url);
     }
     default: {
-      throw Error("unrecognized chain id");
+      throw Error("unrecognized evm token address");
     }
   }
 }
 
-export function getUstAddress(id: number): string {
-  switch (id) {
-    case ETH_NETWORK_CHAIN_ID: {
-      return "0x36Ed51Afc79619b299b238898E72ce482600568a";
+export function getChainIdFromAddress(tokenAddress: string) {
+  switch (tokenAddress) {
+    case ETH_TOKEN_INFO.address: {
+      return CHAIN_ID_ETH;
     }
-    case POLYGON_NETWORK_CHAIN_ID: {
-      return "0xe3a1c77e952b57b5883f6c906fc706fcc7d4392c";
+    case MATIC_TOKEN_INFO.address: {
+      return CHAIN_ID_POLYGON;
+    }
+    case AVAX_TOKEN_INFO.address: {
+      return CHAIN_ID_AVAX;
+    }
+    case BNB_TOKEN_INFO.address: {
+      return CHAIN_ID_BSC;
+    }
+    case UST_TOKEN_INFO.address: {
+      return CHAIN_ID_TERRA;
+    }
+    default: {
+      throw Error("unrecognized evm token address");
+    }
+  }
+}
+
+async function makeRouter(tokenAddress: string, loc: UstLocation) {
+  switch (tokenAddress) {
+    case ETH_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new EthRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case MATIC_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new MaticRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case AVAX_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new AvaxRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case BNB_TOKEN_INFO.address: {
+      const provider = makeEvmProviderFromAddress(tokenAddress);
+      const router = new BnbRouter(provider);
+      await router.initialize(loc);
+      return router;
+    }
+    case UST_TOKEN_INFO.address: {
+      return new UstRouter();
     }
     default: {
       throw Error("unrecognized chain id");
@@ -51,123 +142,101 @@ function splitSlippageInHalf(totalSlippage: string): string {
     .toString();
 }
 
-interface RelayerFee {
-  amount: ethers.BigNumber;
+export interface RelayerFee {
+  amount: string;
   tokenAddress: string;
 }
 
-export interface ExactInParameters {
-  protocol: string;
-  amountIn: ethers.BigNumber;
-  minAmountOut: ethers.BigNumber;
-  deadline: ethers.BigNumber;
-  poolFee: string;
-  path: [string, string];
-}
-
 export interface ExactInCrossParameters {
-  src: ExactInParameters;
-  dst: ExactInParameters;
+  amountIn: string;
+  ustAmountIn: string;
+  minAmountOut: string;
+  src: ExactInParameters | undefined;
+  dst: ExactInParameters | undefined;
   relayerFee: RelayerFee;
 }
 
-export interface ExactOutParameters {
-  protocol: string;
-  amountOut: ethers.BigNumber;
-  maxAmountIn: ethers.BigNumber;
-  deadline: ethers.BigNumber;
-  poolFee: string;
-  path: [string, string];
-}
-
 export interface ExactOutCrossParameters {
-  src: ExactOutParameters;
-  dst: ExactOutParameters;
+  amountOut: string;
+  ustAmountIn: string;
+  maxAmountIn: string;
+  src: ExactOutParameters | undefined;
+  dst: ExactOutParameters | undefined;
   relayerFee: RelayerFee;
 }
 
 export class UniswapToUniswapQuoter {
-  // providers
-  srcProvider: ethers.providers.Provider;
-  dstProvider: ethers.providers.Provider;
-
-  // networks
-  srcNetwork: ethers.providers.Network;
-  dstNetwork: ethers.providers.Network;
+  // tokens
+  tokenInAddress: string;
+  tokenOutAddress: string;
 
   // routers
-  srcRouter: UniswapV3Router | QuickswapRouter;
-  dstRouter: UniswapV3Router | QuickswapRouter;
+  srcRouter: UstRouter | EthRouter | MaticRouter | AvaxRouter | BnbRouter;
+  dstRouter: UstRouter | EthRouter | MaticRouter | AvaxRouter | BnbRouter;
 
-  // tokens
-  srcTokenIn: UniEvmToken;
-  srcTokenOut: UniEvmToken;
-  dstTokenIn: UniEvmToken;
-  dstTokenOut: UniEvmToken;
+  async initialize(tokenInAddress: string, tokenOutAddress: string) {
+    if (tokenInAddress !== this.tokenInAddress) {
+      this.tokenInAddress = tokenInAddress;
+      this.srcRouter = await makeRouter(tokenInAddress, UstLocation.Out);
+    }
 
-  constructor(
-    srcProvider: ethers.providers.Provider,
-    dstProvider: ethers.providers.Provider
-  ) {
-    this.srcProvider = srcProvider;
-    this.dstProvider = dstProvider;
-  }
-
-  async initialize(): Promise<void> {
-    [this.srcNetwork, this.dstNetwork] = await Promise.all([
-      this.srcProvider.getNetwork(),
-      this.dstProvider.getNetwork(),
-    ]);
-
-    this.srcRouter = makeRouter(this.srcProvider, this.srcNetwork.chainId);
-    this.dstRouter = makeRouter(this.dstProvider, this.dstNetwork.chainId);
-    return;
-  }
-
-  sameChain(): boolean {
-    return this.srcNetwork.chainId === this.dstNetwork.chainId;
-  }
-
-  async makeSrcTokens(
-    tokenInAddress: string
-  ): Promise<[UniEvmToken, UniEvmToken]> {
-    const ustOutAddress = getUstAddress(this.srcNetwork.chainId);
-
-    const router = this.srcRouter;
-
-    [this.srcTokenIn, this.srcTokenOut] = await Promise.all([
-      router.makeToken(tokenInAddress),
-      router.makeToken(ustOutAddress),
-    ]);
-    return [this.srcTokenIn, this.srcTokenOut];
-  }
-
-  async makeDstTokens(
-    tokenOutAddress: string
-  ): Promise<[UniEvmToken, UniEvmToken]> {
-    const ustInAddress = getUstAddress(this.dstNetwork.chainId);
-
-    const router = this.dstRouter;
-
-    [this.dstTokenIn, this.dstTokenOut] = await Promise.all([
-      router.makeToken(ustInAddress),
-      router.makeToken(tokenOutAddress),
-    ]);
-    return [this.dstTokenIn, this.dstTokenOut];
+    if (tokenOutAddress !== this.tokenOutAddress) {
+      this.tokenOutAddress = tokenOutAddress;
+      this.dstRouter = await makeRouter(tokenOutAddress, UstLocation.In);
+    }
   }
 
   async computeAndVerifySrcPoolAddress(): Promise<string> {
-    return this.srcRouter.computeAndVerifyPoolAddress(
-      this.srcTokenIn,
-      this.srcTokenOut
-    );
+    return this.srcRouter.computeAndVerifyPoolAddress();
   }
 
   async computeAndVerifyDstPoolAddress(): Promise<string> {
-    return this.dstRouter.computeAndVerifyPoolAddress(
-      this.dstTokenIn,
-      this.dstTokenOut
-    );
+    return this.dstRouter.computeAndVerifyPoolAddress();
+  }
+
+  computeSwapSlippage(slippage: string): string {
+    if (this.isSrcUst() || this.isDstUst()) {
+      return slippage;
+    }
+
+    return splitSlippageInHalf(slippage);
+  }
+
+  getRelayerFee(amount: string): RelayerFee {
+    if (this.isSrcUst()) {
+      return {
+        amount: this.srcRouter.computeUnitAmountOut(amount),
+        tokenAddress: TERRA_UST, // TODO: make sure this is the right address for bridge transfer?
+      };
+    }
+
+    const relayerFee: RelayerFee = {
+      amount: this.srcRouter.computeUnitAmountOut(amount),
+      tokenAddress: this.srcRouter.getTokenOutAddress(),
+    };
+    return relayerFee;
+  }
+
+  makeSrcExactInParameters(
+    amountIn: string,
+    minAmountOut: string
+  ): ExactInParameters | undefined {
+    if (this.isSrcUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return makeExactInParameters(this.srcRouter, amountIn, minAmountOut);
+  }
+
+  makeDstExactInParameters(
+    amountIn: string,
+    minAmountOut: string
+  ): ExactInParameters | undefined {
+    if (this.isDstUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return makeExactInParameters(this.dstRouter, amountIn, minAmountOut);
   }
 
   async computeExactInParameters(
@@ -175,69 +244,67 @@ export class UniswapToUniswapQuoter {
     slippage: string,
     relayerFeeUst: string
   ): Promise<ExactInCrossParameters> {
-    const singleSlippage = splitSlippageInHalf(slippage);
+    const singleSlippage = this.computeSwapSlippage(slippage);
 
     // src quote
     const srcRouter = this.srcRouter;
-    const srcTokenIn = this.srcTokenIn;
-    const srcTokenOut = this.srcTokenOut;
-    const srcMinAmountOut = await srcRouter.fetchQuoteAmountOut(
-      srcTokenIn,
-      srcTokenOut,
+    const srcMinAmountOut = await srcRouter.fetchExactInQuote(
       amountIn,
       singleSlippage
     );
 
     // dst quote
     const dstRouter = this.dstRouter;
-    const dstAmountIn = this.srcTokenOut.formatAmount(srcMinAmountOut);
+    const dstAmountIn = srcMinAmountOut; //srcRouter.formatAmountOut(srcMinAmountOut);
     if (Number(dstAmountIn) < Number(relayerFeeUst)) {
       throw Error(
         `srcAmountOut <= relayerFeeUst. ${dstAmountIn} vs ${relayerFeeUst}`
       );
     }
 
-    const dstTokenIn = this.dstTokenIn;
-    const dstTokenOut = this.dstTokenOut;
-    const dstAmountInAfterFee = dstTokenIn.subtractAmounts(
+    const dstAmountInAfterFee = subtractFixedAmounts(
       dstAmountIn,
-      relayerFeeUst
+      relayerFeeUst,
+      dstRouter.getTokenInDecimals()
     );
 
-    const dstMinAmountOut = await dstRouter.fetchQuoteAmountOut(
-      dstTokenIn,
-      dstTokenOut,
+    const dstMinAmountOut = await dstRouter.fetchExactInQuote(
       dstAmountInAfterFee,
       singleSlippage
     );
 
-    const srcParameters: ExactInParameters = {
-      protocol: srcRouter.getProtocol(),
-      amountIn: srcTokenIn.computeUnitAmount(amountIn),
-      minAmountOut: srcMinAmountOut,
-      poolFee: srcRouter.getPoolFee(),
-      deadline: srcRouter.getTradeDeadline(),
-      path: [srcTokenIn.getAddress(), srcTokenOut.getAddress()],
-    };
-
-    const dstParameters: ExactInParameters = {
-      protocol: dstRouter.getProtocol(),
-      amountIn: dstTokenIn.computeUnitAmount(dstAmountInAfterFee),
-      minAmountOut: dstMinAmountOut,
-      poolFee: dstRouter.getPoolFee(),
-      deadline: dstRouter.getTradeDeadline(),
-      path: [dstTokenIn.getAddress(), dstTokenOut.getAddress()],
-    };
-
+    // organize parameters
     const params: ExactInCrossParameters = {
-      src: srcParameters,
-      dst: dstParameters,
-      relayerFee: {
-        amount: dstTokenIn.computeUnitAmount(relayerFeeUst),
-        tokenAddress: this.dstTokenIn.getAddress(),
-      },
+      amountIn: amountIn,
+      ustAmountIn: dstAmountInAfterFee,
+      minAmountOut: dstMinAmountOut,
+      src: this.makeSrcExactInParameters(amountIn, srcMinAmountOut),
+      dst: this.makeDstExactInParameters(dstAmountInAfterFee, dstMinAmountOut),
+      relayerFee: this.getRelayerFee(relayerFeeUst),
     };
     return params;
+  }
+
+  makeSrcExactOutParameters(
+    amountOut: string,
+    maxAmountIn: string
+  ): ExactOutParameters | undefined {
+    if (this.isSrcUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return makeExactOutParameters(this.srcRouter, amountOut, maxAmountIn);
+  }
+
+  makeDstExactOutParameters(
+    amountOut: string,
+    maxAmountIn: string
+  ): ExactOutParameters | undefined {
+    if (this.isDstUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return makeExactOutParameters(this.dstRouter, amountOut, maxAmountIn);
   }
 
   async computeExactOutParameters(
@@ -249,69 +316,86 @@ export class UniswapToUniswapQuoter {
 
     // dst quote first
     const dstRouter = this.dstRouter;
-    const dstTokenIn = this.dstTokenIn;
-    const dstTokenOut = this.dstTokenOut;
-    const dstMaxAmountIn = await dstRouter.fetchQuoteAmountIn(
-      dstTokenIn,
-      dstTokenOut,
+    const dstMaxAmountIn = await dstRouter.fetchExactOutQuote(
       amountOut,
       singleSlippage
     );
 
     // src quote
     const srcRouter = this.srcRouter;
-    const srcAmountOut = this.dstTokenIn.formatAmount(dstMaxAmountIn);
+    const srcAmountOut = dstMaxAmountIn;
     if (Number(srcAmountOut) < Number(relayerFeeUst)) {
       throw Error(
         `dstAmountIn <= relayerFeeUst. ${srcAmountOut} vs ${relayerFeeUst}`
       );
     }
 
-    const srcTokenIn = this.srcTokenIn;
-    const srcTokenOut = this.srcTokenOut;
-    const srcAmountOutBeforeFee = srcTokenOut.addAmounts(
+    const srcAmountOutBeforeFee = addFixedAmounts(
       srcAmountOut,
-      relayerFeeUst
+      relayerFeeUst,
+      srcRouter.getTokenOutDecimals()
     );
 
-    const srcMaxAmountIn = await srcRouter.fetchQuoteAmountIn(
-      srcTokenIn,
-      srcTokenOut,
+    const srcMaxAmountIn = await srcRouter.fetchExactOutQuote(
       srcAmountOutBeforeFee,
       singleSlippage
     );
 
-    const srcParameters: ExactOutParameters = {
-      protocol: srcRouter.getProtocol(),
-      amountOut: srcTokenOut.computeUnitAmount(srcAmountOutBeforeFee),
-      maxAmountIn: srcMaxAmountIn,
-      poolFee: srcRouter.getPoolFee(),
-      deadline: srcRouter.getTradeDeadline(),
-      path: [srcTokenIn.getAddress(), srcTokenOut.getAddress()],
-    };
-
-    const dstParameters: ExactOutParameters = {
-      protocol: dstRouter.getProtocol(),
-      amountOut: dstTokenOut.computeUnitAmount(amountOut),
-      maxAmountIn: dstMaxAmountIn,
-      poolFee: dstRouter.getPoolFee(),
-      deadline: dstRouter.getTradeDeadline(),
-      path: [dstTokenIn.getAddress(), dstTokenOut.getAddress()],
-    };
-
+    // organize parameters
     const params: ExactOutCrossParameters = {
-      src: srcParameters,
-      dst: dstParameters,
-      relayerFee: {
-        amount: dstTokenIn.computeUnitAmount(relayerFeeUst),
-        tokenAddress: this.dstTokenIn.getAddress(),
-      },
+      amountOut: amountOut,
+      ustAmountIn: dstMaxAmountIn,
+      maxAmountIn: srcMaxAmountIn,
+      src: this.makeSrcExactOutParameters(
+        srcAmountOutBeforeFee,
+        srcMaxAmountIn
+      ),
+      dst: this.makeDstExactOutParameters(amountOut, dstMaxAmountIn),
+      relayerFee: this.getRelayerFee(relayerFeeUst),
     };
     return params;
   }
 
   setDeadlines(deadline: string): void {
-    this.srcRouter.setDeadline(deadline);
-    this.dstRouter.setDeadline(deadline);
+    if (!this.isSrcUst()) {
+      // @ts-ignore
+      this.srcRouter.setDeadline(deadline);
+    }
+    if (!this.isDstUst()) {
+      // @ts-ignore
+      this.dstRouter.setDeadline(deadline);
+    }
+  }
+
+  isSrcUst(): boolean {
+    return this.tokenInAddress === TERRA_UST;
+  }
+
+  isDstUst(): boolean {
+    return this.tokenOutAddress === TERRA_UST;
+  }
+
+  getSrcEvmProvider(): ethers.providers.Provider | undefined {
+    if (this.isSrcUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return this.srcRouter.getProvider();
+  }
+
+  getDstEvmProvider(): ethers.providers.Provider | undefined {
+    if (this.isDstUst()) {
+      return undefined;
+    }
+    // @ts-ignore
+    return this.dstRouter.getProvider();
+  }
+
+  getSrcChainId(): ChainId {
+    return getChainIdFromAddress(this.tokenInAddress);
+  }
+
+  getDstChainId(): ChainId {
+    return getChainIdFromAddress(this.tokenOutAddress);
   }
 }

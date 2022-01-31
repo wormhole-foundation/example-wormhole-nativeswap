@@ -3,6 +3,10 @@
   "name": "NativeSwap",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm_js_in_src.sh"
+  },
   "dependencies": {
     "@certusone/wormhole-sdk": "^0.1.6",
     "@improbable-eng/grpc-web-node-http-transport": "^0.15.0",
@@ -28,32 +32,6 @@
     "react-scripts": "4.0.3",
     "typescript": "^4.4.2",
     "use-debounce": "^7.0.1"
-  },
-  "scripts": {
-    "start": "craco start",
-    "build": "craco build",
-    "test": "craco test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
   },
   "devDependencies": {
     "@craco/craco": "^6.3.0",
