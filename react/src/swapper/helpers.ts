@@ -11,14 +11,14 @@ import {
 export const CROSSCHAINSWAP_GAS_PARAMETERS_EIP1559 = {
   gasLimit: "694200",
   //maxFeePerGas: "250000000000",
-  maxFeePerGas: "20420690000",
+  maxFeePerGas: "25420690000",
   maxPriorityFeePerGas: "1690000000",
 };
 
 export const CROSSCHAINSWAP_GAS_PARAMETERS_EVM = {
   gasLimit: "694200",
   //gasPrice: "250000000000",
-  gasPrice: "20420690000",
+  gasPrice: "25420690000",
 };
 
 export const EVM_EIP1559_CHAIN_IDS = [
