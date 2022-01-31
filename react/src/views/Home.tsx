@@ -581,29 +581,34 @@ export default function Home() {
         </Paper>
         <div className={classes.spacer} />
         <Footer />
-        <Link href="https://goerli-faucet.slock.it/" style={{ margin: "5px" }}>
+        <Link href="https://goerli-faucet.slock.it/" 
+          target="_blank" style={{ margin: "5px" }}>
           Goerli Faucet
         </Link>
         <Link
           href="https://faucet.polygon.technology/"
+          target="_blank"
           style={{ margin: "5px" }}
         >
           Mumbai Faucet
         </Link>
         <Link
           href="https://faucet.avax-test.network/"
+          target="_blank"
           style={{ margin: "5px" }}
         >
           Fuji Faucet
         </Link>
         <Link
           href="https://testnet.binance.org/faucet-smart/"
+          target="_blank"
           style={{ margin: "5px" }}
         >
           BSC Faucet
         </Link>
         <Link
           href="https://github.com/certusone/wormhole-nativeswap-example/"
+          target="_blank"
           style={{ margin: "5px" }}
         >
           NativeSwap GitHub
