@@ -194,8 +194,6 @@ export async function relayVaaToTerra(
         "]"
     );
 
-    logger.debug("relayVaaToTerra: creating a message");
-
     logger.debug(
       "relayVaaToTerra: vaa as hex: [" +
         Buffer.from(vaaBytes, "hex").toString("hex") +
@@ -211,7 +209,7 @@ export async function relayVaaToTerra(
       terraContractData.wallet.key.accAddress,
       terraContractData.contractAddress,
       {
-        redeem_payload: {
+        submit_vaa: {
           data: Buffer.from(vaaBytes, "hex").toString("base64"),
         },
       }
