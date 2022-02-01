@@ -1,10 +1,10 @@
-use cosmwasm_std::{Addr, Storage};
+use cosmwasm_std::{Addr, Binary, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub static CONFIG_KEY: &[u8] = b"config";
-pub static RECIPIENT_KEY: &[u8] = b"recipient";
+pub static REPLY_STATE_KEY: &[u8] = b"reply_state";
 
 type HumanAddr = String;
 
@@ -22,6 +22,15 @@ pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<ConfigInfo> {
     singleton_read(storage, CONFIG_KEY)
 }
 
-pub fn recipient(storage: &mut dyn Storage) -> Singleton<Addr> {
-    singleton(storage, RECIPIENT_KEY)
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ReplyState {
+    pub amount: u128,
+    pub fee: u128,
+    pub denom: String,
+    pub recipient: Addr,
+    pub relayer: Addr,
+}
+
+pub fn reply_state(storage: &mut dyn Storage) -> Singleton<ReplyState> {
+    singleton(storage, REPLY_STATE_KEY)
 }

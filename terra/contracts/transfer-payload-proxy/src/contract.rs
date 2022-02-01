@@ -1,13 +1,14 @@
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg};
-use crate::state::{config, config_read, recipient, ConfigInfo};
+use crate::state::{config, config_read, reply_state, ConfigInfo, ReplyState};
 use cosmwasm_std::{
-    coin, entry_point, to_binary, Addr, BankMsg, Binary, CosmosMsg, DepsMut, Env, Event,
-    MessageInfo, QueryRequest, Reply, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
-    WasmQuery,
+    coin, entry_point, to_binary, BankMsg, Binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo,
+    QueryRequest, Reply, Response, StdError, StdResult, SubMsg, WasmQuery,
 };
-use cw20_base::msg::ExecuteMsg as TokenMsg;
+use cosmwasm_std::{from_binary, WasmMsg};
 use token_bridge_terra::msg::WormholeQueryMsg;
-use token_bridge_terra::state::{Action, TokenBridgeMessage, TransferWithPayloadInfo};
+use token_bridge_terra::state::{
+    Action, TokenBridgeMessage, TransferInfo, TransferWithPayloadInfo,
+};
 use wormhole::byte_utils::ByteUtils;
 use wormhole::state::ParsedVAA;
 
@@ -35,42 +36,87 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
-        ExecuteMsg::RedeemPayload { data } => redeem_payload(deps, env, info, &data),
+        ExecuteMsg::SubmitVaa { data } => redeem_payload(deps, env, info, &data),
     }
 }
+
+// (1) get a VAA
+// (2) forward VAA to the token bridge (send tokens to us)
+// (3) send tokens to actual recipient
 
 fn redeem_payload(
     mut deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     vaa: &Binary,
 ) -> StdResult<Response> {
     let parsed_vaa = parse_vaa(deps.branch(), env.block.time.seconds(), vaa)?;
     let data = parsed_vaa.payload;
 
+    // TODO: maybe expose a token bridge query endpoint for this?
     let message = TokenBridgeMessage::deserialize(&data)?;
-    assert_eq!(
-        message.action,
-        Action::TRANSFER_WITH_PAYLOAD,
-        "Only transfers with payload are supported"
-    );
+
+    if message.action != Action::TRANSFER_WITH_PAYLOAD {
+        return Err(StdError::generic_err(
+            "Only transfers with payload are supported",
+        ));
+    }
 
     let transfer_with_payload = TransferWithPayloadInfo::deserialize(&message.payload)?;
 
     let target_address = (&transfer_with_payload.transfer_info.recipient.as_slice()).get_address(0);
     let target_address_humanized = deps.api.addr_humanize(&target_address)?;
 
-    assert_eq!(
-        target_address_humanized, env.contract.address,
-        "Transfer recipient must be {}",
-        env.contract.address
-    );
+    if target_address_humanized != env.contract.address {
+        return Err(StdError::generic_err(format!(
+            "Transfer recipient must be {}",
+            env.contract.address
+        )));
+    }
 
     let real_target_address = (&transfer_with_payload.payload.as_slice()).get_address(0);
     let real_target_address_humanized = deps.api.addr_humanize(&real_target_address)?;
 
-    assert!(recipient(deps.storage).load().is_err(), "Re-entrancy");
-    recipient(deps.storage).save(&real_target_address_humanized)?;
+    if reply_state(deps.storage).load().is_ok() {
+        return Err(StdError::generic_err("Re-entrancy"));
+    }
+
+    if transfer_with_payload.transfer_info.token_address.as_slice()[0] != 1 {
+        return Err(StdError::generic_err("Only native tokens are allowed"));
+    }
+
+    // Wipe the native byte marker and extract the serialized denom.
+    let mut token_address = transfer_with_payload.transfer_info.token_address.clone();
+    let token_address = token_address.as_mut_slice();
+    token_address[0] = 0;
+
+    let mut denom = token_address.to_vec();
+    denom.retain(|&c| c != 0);
+    let denom = String::from_utf8(denom).unwrap();
+
+    let amount = transfer_with_payload.transfer_info.amount;
+    let fee = transfer_with_payload.transfer_info.fee;
+
+    // TODO: figure out fees
+    let (not_supported_amount, mut amount) = amount;
+    let (not_supported_fee, fee) = fee;
+
+    amount = amount.checked_sub(fee).unwrap();
+
+    // Check high 128 bit of amount value to be empty
+    if not_supported_amount != 0 || not_supported_fee != 0 {
+        return Err(StdError::generic_err("Amount too high"));
+    }
+
+    let state = ReplyState {
+        amount,
+        fee,
+        denom,
+        recipient: real_target_address_humanized,
+        relayer: info.sender,
+    };
+
+    reply_state(deps.storage).save(&state)?;
 
     let cfg = config_read(deps.storage).load()?;
 
@@ -87,81 +133,53 @@ fn redeem_payload(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> StdResult<Response> {
-    let real_recipient = recipient(deps.storage).load()?;
-    recipient(deps.storage).remove();
+pub fn reply(mut deps: DepsMut, _env: Env, _msg: Reply) -> StdResult<Response> {
+    let ReplyState {
+        amount,
+        fee,
+        denom,
+        recipient,
+        relayer,
+    } = reply_state(deps.storage).load()?;
+    reply_state(deps.storage).remove();
 
-    let events = msg
-        .result
-        .into_result()
-        .map_err(|e| StdError::generic_err(e))?
-        .events;
+    let mut messages = vec![CosmosMsg::Bank(BankMsg::Send {
+        to_address: recipient.to_string(),
+        amount: coins_after_tax(deps.branch(), vec![coin(amount, &denom)])?,
+    })];
 
-    let last_event: &Event = events
-        .last()
-        .ok_or(StdError::generic_err("No events received"))?;
-
-    match TransferCompletedEvent::from_event(last_event)? {
-        TransferCompletedEvent::CompleteTransferTerraNative {
-            recipient,
-            denom,
-            amount,
-        } => complete_transfer_terra_native(env, recipient, real_recipient, denom, amount),
-        TransferCompletedEvent::CompleteTransferCW20 {
-            recipient,
-            contract,
-            amount,
-        } => complete_transfer_cw20(env, recipient, real_recipient, contract, amount),
+    if fee != 0 {
+        messages.push(CosmosMsg::Bank(BankMsg::Send {
+            to_address: relayer.to_string(),
+            amount: coins_after_tax(deps, vec![coin(fee, &denom)])?,
+        }));
     }
-}
-
-fn complete_transfer_cw20(
-    env: Env,
-    recipient: Addr,
-    real_recipient: Addr,
-    contract: String,
-    amount: String,
-) -> StdResult<Response> {
-    assert_eq!(recipient, env.contract.address);
-    let coin_amount =
-        u128::from_str_radix(&amount, 10).map_err(|err| StdError::generic_err(err.to_string()))?;
-
-    let messages = vec![CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: contract,
-        msg: to_binary(&TokenMsg::Transfer {
-            recipient: real_recipient.to_string(),
-            amount: Uint128::from(coin_amount),
-        })?,
-        funds: vec![],
-    })];
-    Ok(Response::new()
-        .add_messages(messages)
-        .add_attribute("action", "complete_transfer_cw20")
-        .add_attribute("recipient", "real_recipient"))
-}
-
-fn complete_transfer_terra_native(
-    env: Env,
-    recipient: Addr,
-    real_recipient: Addr,
-    denom: String,
-    amount: String,
-) -> StdResult<Response> {
-    assert_eq!(recipient, env.contract.address);
-    // TODO(csongor): handle tax here?
-    let coin_amount =
-        u128::from_str_radix(&amount, 10).map_err(|err| StdError::generic_err(err.to_string()))?;
-
-    let messages = vec![CosmosMsg::Bank(BankMsg::Send {
-        to_address: real_recipient.to_string(),
-        amount: vec![coin(coin_amount, denom)],
-    })];
 
     Ok(Response::new()
         .add_messages(messages)
-        .add_attribute("action", "complete_transfer_terra_native")
-        .add_attribute("recipient", "real_recipient"))
+        .add_attribute("action", "reply_handler")
+        .add_attribute("recipient", recipient)
+        .add_attribute("denom", denom)
+        .add_attribute("amount", amount.to_string())
+        .add_attribute("fee", fee.to_string()))
 }
+
+// TODO: figure out if this is needed
+pub fn coins_after_tax(_deps: DepsMut, coins: Vec<Coin>) -> StdResult<Vec<Coin>> {
+    Ok(coins)
+}
+//     let mut res = vec![];
+//     for coin in coins {
+//         let asset = Asset {
+//             amount: coin.amount.clone(),
+//             info: AssetInfo::NativeToken {
+//                 denom: coin.denom.clone(),
+//             },
+//         };
+//         res.push(asset.deduct_tax(&deps.querier)?);
+//     }
+//     Ok(res)
+// }
 
 pub fn parse_vaa(deps: DepsMut, block_time: u64, data: &Binary) -> StdResult<ParsedVAA> {
     let cfg = config_read(deps.storage).load()?;
@@ -173,64 +191,4 @@ pub fn parse_vaa(deps: DepsMut, block_time: u64, data: &Binary) -> StdResult<Par
         })?,
     }))?;
     Ok(vaa)
-}
-
-enum TransferCompletedEvent {
-    CompleteTransferTerraNative {
-        recipient: Addr,
-        denom: String,
-        amount: String,
-    },
-    // either native cw20 or wrapped cw20
-    CompleteTransferCW20 {
-        recipient: Addr,
-        contract: String,
-        amount: String,
-    },
-}
-
-impl TransferCompletedEvent {
-    fn from_event(event: &Event) -> StdResult<Self> {
-        assert_eq!(event.ty, "wasm");
-        let mut attrs = event.clone().attributes;
-        let _contract_address = attrs.remove(0);
-        let action = attrs.remove(0);
-        assert_eq!(action.key, "action");
-        match action.value.as_str() {
-            "complete_transfer_native" | "complete_transfer_wrapped" => {
-                if let [recipient, contract, amount, ..] = attrs.as_slice() {
-                    assert_eq!(recipient.key, "recipient");
-                    assert_eq!(contract.key, "contract");
-                    assert_eq!(amount.key, "amount");
-
-                    Ok(Self::CompleteTransferCW20 {
-                        recipient: Addr::unchecked(recipient.clone().value),
-                        contract: contract.clone().value,
-                        amount: amount.clone().value,
-                    })
-                } else {
-                    Err(StdError::generic_err("Ill-formed attributes"))
-                }
-            }
-            "complete_transfer_terra_native" => {
-                if let [recipient, denom, amount, ..] = attrs.as_slice() {
-                    assert_eq!(recipient.key, "recipient");
-                    assert_eq!(denom.key, "denom");
-                    assert_eq!(amount.key, "amount");
-
-                    Ok(Self::CompleteTransferTerraNative {
-                        recipient: Addr::unchecked(recipient.clone().value),
-                        denom: denom.clone().value,
-                        amount: amount.clone().value,
-                    })
-                } else {
-                    Err(StdError::generic_err("Ill-formed attributes"))
-                }
-            }
-            _ => Err(StdError::generic_err(format!(
-                "Invalid action: {}",
-                action.key
-            ))),
-        }
-    }
 }
