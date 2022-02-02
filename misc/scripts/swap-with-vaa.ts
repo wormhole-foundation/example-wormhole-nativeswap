@@ -22,7 +22,7 @@ import { makeProvider } from "./src/provider";
 require("dotenv").config({ path: ".env" });
 
 // swap related parameters (configurable in UI)
-const SWAP_AMOUNT_IN_MATIC = "0.0069";
+const SWAP_AMOUNT_IN_MATIC = "0.069";
 const SWAP_AMOUNT_IN_ETH = "0.000907";
 const SWAP_AMOUNT_IN_AVAX = "0.0075";
 const SWAP_AMOUNT_IN_BNB = "0.0015";
@@ -243,12 +243,12 @@ async function swapEverythingExactIn(
 
   // do the dst swap after fetching vaa
   // connect dst wallet
-  const dstWallet = determineWalletFromToken(tokenOutAddress);
+  //const dstWallet = determineWalletFromToken(tokenOutAddress);
 
-  console.info("fetchVaaAndSwap");
+  //console.info("fetchVaaAndSwap");
   //const dstSwapReceipt = await swapper.fetchVaaAndSwap(dstWallet);
   //console.info(`dst transaction: ${dstSwapReceipt.transactionHash}`);
-  console.warn("jk");
+  //console.warn("jk");
 
   return;
 }
@@ -412,8 +412,8 @@ async function main() {
   const tokenOut = getTokenInfo(args.out);
   //const tokenOut = UST_TOKEN_INFO;
 
-  const recipientAddress = "0x4e2dfAD7D7d0076b5A0A41223E4Bee390C33251C";
-  //const recipientAddress = "terra1vewnsxcy5fqjslyyy409cw8js550esen38n8ey";
+  //const recipientAddress = "0x4e2dfAD7D7d0076b5A0A41223E4Bee390C33251C";
+  const recipientAddress = "terra1vewnsxcy5fqjslyyy409cw8js550esen38n8ey";
 
   if (testExactIn) {
     console.info(`testing exact in. native=${isNative}`);
@@ -427,7 +427,7 @@ async function main() {
       determineAmountFromToken(tokenIn.address),
       recipientAddress
     );
-
+    /*
     if (tokenOut.address === UST_TOKEN_INFO.address) {
       console.warn("not pinging back");
     } else {
@@ -441,6 +441,7 @@ async function main() {
         recipientAddress
       );
     }
+    */
   } else {
     console.info(`testing exact out. native=${isNative}`);
 
