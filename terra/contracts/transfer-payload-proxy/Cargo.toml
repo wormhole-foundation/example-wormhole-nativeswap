@@ -18,6 +18,7 @@ cosmwasm-storage = { version = "0.16.0" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 cw20-base = { version = "0.8.0", features = ["library"] }
+terraswap = "2.4.0"
 
 wormhole-bridge-terra = { git = "https://github.com/certusone/wormhole", branch = "feat/token-bridge-proxy", features = ["library"] }
 token-bridge-terra = { git = "https://github.com/certusone/wormhole", branch = "feat/token-bridge-proxy", features = ["library"] }

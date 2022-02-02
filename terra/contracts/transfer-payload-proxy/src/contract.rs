@@ -4,13 +4,18 @@ use cosmwasm_std::{
     coin, entry_point, to_binary, BankMsg, Binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo,
     QueryRequest, Reply, Response, StdError, StdResult, SubMsg, WasmQuery,
 };
-use cosmwasm_std::{from_binary, WasmMsg};
+use cosmwasm_std::{WasmMsg};
 use token_bridge_terra::msg::WormholeQueryMsg;
 use token_bridge_terra::state::{
-    Action, TokenBridgeMessage, TransferInfo, TransferWithPayloadInfo,
+    Action, TokenBridgeMessage, TransferWithPayloadInfo,
 };
 use wormhole::byte_utils::ByteUtils;
 use wormhole::state::ParsedVAA;
+
+use terraswap::asset::{
+    Asset,
+    AssetInfo,
+};
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
@@ -42,7 +47,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
 
 // (1) get a VAA
 // (2) forward VAA to the token bridge (send tokens to us)
-// (3) send tokens to actual recipient
+// (3) send tokens to actual recipient and fees to the relayer
 
 fn redeem_payload(
     mut deps: DepsMut,
@@ -94,23 +99,22 @@ fn redeem_payload(
     denom.retain(|&c| c != 0);
     let denom = String::from_utf8(denom).unwrap();
 
-    let amount = transfer_with_payload.transfer_info.amount;
-    let fee = transfer_with_payload.transfer_info.fee;
-
-    // TODO: figure out fees
-    let (not_supported_amount, mut amount) = amount;
-    let (not_supported_fee, fee) = fee;
-
-    amount = amount.checked_sub(fee).unwrap();
+    let (not_supported_amount, mut amount) = transfer_with_payload.transfer_info.amount;
+    let (not_supported_fee, fee) = transfer_with_payload.transfer_info.fee;
 
     // Check high 128 bit of amount value to be empty
     if not_supported_amount != 0 || not_supported_fee != 0 {
         return Err(StdError::generic_err("Amount too high"));
     }
 
+    if amount <= fee {
+        return Err(StdError::generic_err("Amount is less than the fee!"));
+    }
+    amount = amount - fee;
+
     let state = ReplyState {
-        amount,
-        fee,
+        amount_buf: amount.to_be_bytes(),
+        fee_buf: fee.to_be_bytes(),
         denom,
         recipient: real_target_address_humanized,
         relayer: info.sender,
@@ -135,13 +139,16 @@ fn redeem_payload(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(mut deps: DepsMut, _env: Env, _msg: Reply) -> StdResult<Response> {
     let ReplyState {
-        amount,
-        fee,
+        amount_buf,
+        fee_buf,
         denom,
         recipient,
         relayer,
     } = reply_state(deps.storage).load()?;
     reply_state(deps.storage).remove();
+
+    let amount = u128::from_be_bytes(amount_buf);
+    let fee = u128::from_be_bytes(fee_buf);
 
     let mut messages = vec![CosmosMsg::Bank(BankMsg::Send {
         to_address: recipient.to_string(),
@@ -164,22 +171,19 @@ pub fn reply(mut deps: DepsMut, _env: Env, _msg: Reply) -> StdResult<Response> {
         .add_attribute("fee", fee.to_string()))
 }
 
-// TODO: figure out if this is needed
-pub fn coins_after_tax(_deps: DepsMut, coins: Vec<Coin>) -> StdResult<Vec<Coin>> {
-    Ok(coins)
+pub fn coins_after_tax(deps: DepsMut, coins: Vec<Coin>) -> StdResult<Vec<Coin>> {
+    let mut res = vec![];
+    for coin in coins {
+        let asset = Asset {
+            amount: coin.amount.clone(),
+            info: AssetInfo::NativeToken {
+                denom: coin.denom.clone(),
+            },
+        };
+        res.push(asset.deduct_tax(&deps.querier)?);
+    }
+    Ok(res)
 }
-//     let mut res = vec![];
-//     for coin in coins {
-//         let asset = Asset {
-//             amount: coin.amount.clone(),
-//             info: AssetInfo::NativeToken {
-//                 denom: coin.denom.clone(),
-//             },
-//         };
-//         res.push(asset.deduct_tax(&deps.querier)?);
-//     }
-//     Ok(res)
-// }
 
 pub fn parse_vaa(deps: DepsMut, block_time: u64, data: &Binary) -> StdResult<ParsedVAA> {
     let cfg = config_read(deps.storage).load()?;

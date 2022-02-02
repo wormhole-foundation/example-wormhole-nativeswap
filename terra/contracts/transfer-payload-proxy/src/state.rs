@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Binary, Storage};
+use cosmwasm_std::{Addr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,8 @@ pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<ConfigInfo> {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ReplyState {
-    pub amount: u128,
-    pub fee: u128,
+    pub amount_buf: [u8; 16],
+    pub fee_buf: [u8; 16],
     pub denom: String,
     pub recipient: Addr,
     pub relayer: Addr,
