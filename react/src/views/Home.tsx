@@ -576,18 +576,24 @@ export default function Home() {
             <Typography variant="subtitle1">{relayerTimeoutString}</Typography>
           )}
           <Typography variant="subtitle2" color="error">
-            WARNING: this is a testnet release only
+            WARNING: this is a testnet release only, prices may not reflect
+            reality
           </Typography>
         </Paper>
         <div className={classes.spacer} />
         <Footer />
-        <Link href="https://goerli-faucet.slock.it/" 
-          target="_blank" style={{ margin: "5px" }}>
+        <Link
+          href="https://goerli-faucet.slock.it/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ margin: "5px" }}
+        >
           Goerli Faucet
         </Link>
         <Link
           href="https://faucet.polygon.technology/"
           target="_blank"
+          rel="noopener noreferrer"
           style={{ margin: "5px" }}
         >
           Mumbai Faucet
@@ -595,6 +601,7 @@ export default function Home() {
         <Link
           href="https://faucet.avax-test.network/"
           target="_blank"
+          rel="noopener noreferrer"
           style={{ margin: "5px" }}
         >
           Fuji Faucet
@@ -602,6 +609,7 @@ export default function Home() {
         <Link
           href="https://testnet.binance.org/faucet-smart/"
           target="_blank"
+          rel="noopener noreferrer"
           style={{ margin: "5px" }}
         >
           BSC Faucet
@@ -609,6 +617,7 @@ export default function Home() {
         <Link
           href="https://github.com/certusone/wormhole-nativeswap-example/"
           target="_blank"
+          rel="noopener noreferrer"
           style={{ margin: "5px" }}
         >
           NativeSwap GitHub
