@@ -1,4 +1,4 @@
-import { ChainId, isEVMChain } from "@certusone/wormhole-sdk";
+import { ChainId, CHAIN_ID_POLYGON, isEVMChain } from "@certusone/wormhole-sdk";
 import { LinearProgress, makeStyles, Typography } from "@material-ui/core";
 import { useEffect, useState } from "react";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
@@ -54,7 +54,7 @@ export default function TransactionProgress({
     txBlockNumber !== undefined && txBlockNumber && currentBlock
       ? currentBlock - txBlockNumber
       : 0;
-  const expectedBlocks = 15;
+  const expectedBlocks = chainId === CHAIN_ID_POLYGON ? 512 : 15;
   blockDiff = Math.min(Math.max(blockDiff, 0), expectedBlocks);
   let value;
   let valueBuffer;
