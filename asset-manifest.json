@@ -1,8 +1,8 @@
 {
   "files": {
     "main.css": "/wormhole-nativeswap-example/static/css/main.a55348bc.chunk.css",
-    "main.js": "/wormhole-nativeswap-example/static/js/main.d64841cb.chunk.js",
-    "main.js.map": "/wormhole-nativeswap-example/static/js/main.d64841cb.chunk.js.map",
+    "main.js": "/wormhole-nativeswap-example/static/js/main.8fa530f6.chunk.js",
+    "main.js.map": "/wormhole-nativeswap-example/static/js/main.8fa530f6.chunk.js.map",
     "runtime-main.js": "/wormhole-nativeswap-example/static/js/runtime-main.d6f83e07.js",
     "runtime-main.js.map": "/wormhole-nativeswap-example/static/js/runtime-main.d6f83e07.js.map",
     "static/js/2.49ba0f89.chunk.js": "/wormhole-nativeswap-example/static/js/2.49ba0f89.chunk.js",
@@ -47,6 +47,6 @@
     "static/js/runtime-main.d6f83e07.js",
     "static/js/2.49ba0f89.chunk.js",
     "static/css/main.a55348bc.chunk.css",
-    "static/js/main.d64841cb.chunk.js"
+    "static/js/main.8fa530f6.chunk.js"
   ]
 }
