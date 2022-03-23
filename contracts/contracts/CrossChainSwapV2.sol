@@ -23,8 +23,9 @@ interface TokenBridge {
       bytes memory payload
     ) external payable returns (uint64);
     function completeTransferWithPayload(
-        bytes memory encodedVm
-    ) external returns (IWormhole.VM memory);
+        bytes memory encodedVm,
+        address feeRecipient
+    ) external returns (bytes memory);
 }
 
 
@@ -77,21 +78,22 @@ contract CrossChainSwapV2 {
     function _getParsedPayload(
         bytes calldata encodedVaa,
         uint8 swapFunctionType,
-        uint8 swapCurrencyType
+        uint8 swapCurrencyType,
+        address feeRecipient
     ) private returns (SwapHelper.DecodedVaaParameters memory payload) {
         // complete the transfer on the token bridge
-        IWormhole.VM memory vm = TokenBridge(
+        bytes memory vmPayload = TokenBridge(
             tokenBridgeAddress
-        ).completeTransferWithPayload(encodedVaa);
+        ).completeTransferWithPayload(encodedVaa, feeRecipient);
 
         // make sure payload is the right size
         require(
-            vm.payload.length==expectedVaaLength, 
+            vmPayload.length==expectedVaaLength, 
             "VAA has the wrong number of bytes"
         );
 
         // parse the payload 
-        payload = SwapHelper.decodeVaaPayload(vm);
+        payload = SwapHelper.decodeVaaPayload(vmPayload);
 
         // sanity check payload parameters
         require(
@@ -108,13 +110,31 @@ contract CrossChainSwapV2 {
     function recvAndSwapExactNativeIn(
         bytes calldata encodedVaa
     ) external payable returns (uint256[] memory amounts) {
+        // check token balance before redeeming the payload
+        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector,
+            address(this)
+        ));
+        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
+
         // redeem and fetch parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
                 typeExactIn,
-                typeNativeSwap
+                typeNativeSwap,
+                msg.sender // feeRecipient
             );
+
+        // query token balance after redeeming the payload
+        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this)
+        ));
+        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+
+        // the balance change is the swap amount (less relayer fees)
+        uint256 swapAmountLessFees = balanceAfter - balanceBefore;
 
         // create dynamic address array 
         // uniswap won't take fixed size array
@@ -131,12 +151,6 @@ contract CrossChainSwapV2 {
             uniPath[1]==wrappedNative, 
             "tokenOut must be wrapped native asset"
         );
-
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
-        IERC20 feeToken = IERC20(feeTokenAddress);
-        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 swapAmountLessFees = payload.swapAmount - payload.relayerFee;
 
         // approve the router to spend tokens
         TransferHelper.safeApprove(
@@ -169,7 +183,7 @@ contract CrossChainSwapV2 {
             return amounts;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(
+            IERC20(feeTokenAddress).safeTransfer(
                 payload.recipientAddress, 
                 swapAmountLessFees
             );
@@ -190,13 +204,31 @@ contract CrossChainSwapV2 {
     function recvAndSwapExactIn(
         bytes calldata encodedVaa
     ) external returns (uint256[] memory amounts) {
+        // check token balance before redeeming the payload
+        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector,
+            address(this)
+        ));
+        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
+
         // redeem and fetch the parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
                 typeExactIn,
-                typeTokenSwap
+                typeTokenSwap,
+                msg.sender // feeRecipient
             );
+
+        // query token balance after redeeming the payload
+        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this)
+        ));
+        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+
+        // the balance change is the swap amount (less relayer fees)
+        uint256 swapAmountLessFees = balanceAfter - balanceBefore;
 
         // create dynamic address array - uniswap won't take fixed size array
         address[] memory uniPath = new address[](2);
@@ -205,14 +237,6 @@ contract CrossChainSwapV2 {
 
         // make sure first element in path is UST
         require(uniPath[0]==feeTokenAddress, "tokenIn must be UST");
-
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
-        IERC20 feeToken = IERC20(feeTokenAddress);
-        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 swapAmountLessFees = (
-            payload.swapAmount - payload.relayerFee
-        );
 
         // approve the router to spend tokens
         TransferHelper.safeApprove(
@@ -241,7 +265,7 @@ contract CrossChainSwapV2 {
             return amounts;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(
+            IERC20(feeTokenAddress).safeTransfer(
                 payload.recipientAddress, 
                 swapAmountLessFees
             );
@@ -430,13 +454,31 @@ contract CrossChainSwapV2 {
     function recvAndSwapExactNativeOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
+        // check token balance before redeeming the payload
+        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector,
+            address(this)
+        ));
+        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
+
         // redeem and fetch parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
                 typeExactOut,
-                typeNativeSwap
+                typeNativeSwap,
+                msg.sender // feeRecipient
             );
+
+        // query token balance after redeeming the payload
+        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this)
+        ));
+        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+
+        // the balance change is the swap amount (less relayer fees)
+        uint256 maxAmountInLessFees = balanceAfter - balanceBefore;
     
         // amountOut is the estimated swap amount for exact out methods
         uint256 amountOut = payload.estimatedAmount;
@@ -455,12 +497,6 @@ contract CrossChainSwapV2 {
             payload.path[1]==wrappedNative, 
             "tokenOut must be wrapped native asset"
         );
-
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
-        IERC20 feeToken = IERC20(feeTokenAddress);
-        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
         
         // approve the router to spend tokens
         TransferHelper.safeApprove(
@@ -487,7 +523,7 @@ contract CrossChainSwapV2 {
                     address(swapRouter), 
                     0
                 );
-                feeToken.safeTransfer(
+                IERC20(feeTokenAddress).safeTransfer(
                     payload.recipientAddress, 
                     maxAmountInLessFees - amountInUsed
                 );
@@ -509,7 +545,7 @@ contract CrossChainSwapV2 {
             return amountInUsed;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(
+            IERC20(feeTokenAddress).safeTransfer(
                 payload.recipientAddress, 
                 maxAmountInLessFees
             );
@@ -530,13 +566,31 @@ contract CrossChainSwapV2 {
     function recvAndSwapExactOut(
         bytes calldata encodedVaa
     ) external returns (uint256 amountInUsed) {
+        // check token balance before redeeming the payload
+        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector,
+            address(this)
+        ));
+        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
+
         // redeem and fetch parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
                 typeExactOut,
-                typeTokenSwap
+                typeTokenSwap,
+                msg.sender // feeRecipient
             );
+
+        // query token balance after redeeming the payload
+        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this)
+        ));
+        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+
+        // the balance change is the swap amount (less relayer fees)
+        uint256 maxAmountInLessFees = balanceAfter - balanceBefore;
     
         // amountOut is the estimated swap amount for exact out methods
         uint256 amountOut = payload.estimatedAmount;
@@ -546,12 +600,6 @@ contract CrossChainSwapV2 {
         uniPath[0] = payload.path[0];
         uniPath[1] = payload.path[1];
         require(uniPath[0]==feeTokenAddress, "tokenIn must be UST");
-
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
-        IERC20 feeToken = IERC20(feeTokenAddress);
-        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
         
         // approve the router to spend tokens
         TransferHelper.safeApprove(
@@ -578,7 +626,7 @@ contract CrossChainSwapV2 {
                     address(swapRouter), 
                     0
                 );
-                feeToken.safeTransfer(
+                IERC20(feeTokenAddress).safeTransfer(
                     payload.recipientAddress, 
                     maxAmountInLessFees - amountInUsed
                 );
@@ -596,7 +644,7 @@ contract CrossChainSwapV2 {
             return amountInUsed;
         } catch {
             // swap failed - return UST to recipient
-            feeToken.safeTransfer(
+            IERC20(feeTokenAddress).safeTransfer(
                 payload.recipientAddress, 
                 maxAmountInLessFees
             );
