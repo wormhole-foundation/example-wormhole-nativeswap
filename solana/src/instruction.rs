@@ -18,36 +18,66 @@ use wormhole_sdk::{
 };
 
 use crate::Instruction::{
-    SendMessage,
+    CompleteTransferAndSwap,
 };
 
-/// Create a SendMessage instruction.
-pub fn send_message(
-    program_id: Pubkey,
-    payer: Pubkey,
-    emitter: Pubkey,
-    message: Pubkey,
-    payload: Vec<u8>,
-) -> Instruction {
-    let wormhole = id();
-    let config = config(&wormhole);
-    let fee_collector = fee_collector(&wormhole);
-    let sequence = sequence(&wormhole, &emitter);
-
-    Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new(payer, true),
-            AccountMeta::new_readonly(emitter, false),
-            AccountMeta::new(message, true),
-            AccountMeta::new(config, false),
-            AccountMeta::new(fee_collector, false),
-            AccountMeta::new(sequence, false),
-            AccountMeta::new_readonly(wormhole, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-            AccountMeta::new_readonly(rent::id(), false),
-            AccountMeta::new_readonly(clock::id(), false),
-        ],
-        data: SendMessage(payload).try_to_vec().unwrap(),
+use token_bridge::{
+    api::{
+        complete_transfer::{
+            CompleteWrappedData,
+        },
+    }, instructions::{
+        complete_wrapped,
     }
+};
+
+/// Create a CompleteTransferAndSwap instruction.
+// TODO: fixme
+pub fn complete_transfer_and_swap(
+    program_id: Pubkey,
+    token_bridge_id: Pubkey,
+    bridge_id: Pubkey,
+    payer: Pubkey,
+    message_key: Pubkey,
+    vaa: PostVAAData,
+    payload: PayloadTransfer,
+    to: Pubkey,
+    to_owner: Pubkey,
+    fee_recipient: Option<Pubkey>,
+    data: CompleteWrappedData,
+) -> Instruction {
+    let ix = complete_wrapped_with_payload(
+        token_bridge_id,
+        bridge_id,
+        payer,
+        message_key,
+        vaa,
+        payload.clone(),
+        Pubkey::new(&payload.to),
+        if let Some(fee_r) = fee_recipient {
+            Some(Pubkey::from_str(fee_r.as_str()).unwrap())
+        } else {
+            None
+        },
+        CompleteWrappedData {},
+    );
+
+    return ix
+    
+    // Instruction {
+    //     program_id,
+    //     accounts: vec![
+    //         AccountMeta::new(payer, true),
+    //         AccountMeta::new_readonly(emitter, false),
+    //         AccountMeta::new(vaa, true),
+    //         AccountMeta::new(config, false),
+    //         AccountMeta::new(fee_collector, false),
+    //         AccountMeta::new(sequence, false),
+    //         AccountMeta::new_readonly(wormhole, false),
+    //         AccountMeta::new_readonly(system_program::id(), false),
+    //         AccountMeta::new_readonly(rent::id(), false),
+    //         AccountMeta::new_readonly(clock::id(), false),
+    //     ],
+    //     data: CompleteTransferAndSwap.try_to_vec().unwrap(),
+    // }
 }

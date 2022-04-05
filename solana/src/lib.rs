@@ -19,15 +19,6 @@ use solana_program::{
     entrypoint,
 };
 
-// Import Solana Wormhole SDK.
-use wormhole_sdk::{
-//    instructions::post_message,   // For non-SDK calls
-//    read_config,                  // For non-SDK calls
-//    fee_collector,                // For non-SDK calls
-    post_message,           // SDK call.
-    ConsistencyLevel,
-};
-
 #[cfg(feature = "wasm")]
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 extern crate wasm_bindgen;
@@ -66,14 +57,14 @@ entrypoint!(process_instruction);
 /// program handlers.
 pub fn process_instruction(id: &Pubkey, accs: &[AccountInfo], data: &[u8]) -> ProgramResult {
     match BorshDeserialize::try_from_slice(data).unwrap() {
-        Instruction::CompleteTransferAndSwap(msg) => complete_transfer_and_swap(id, accs, msg),
+        Instruction::CompleteTransferAndSwap => complete_transfer_and_swap(id, accs),
     }?;
     Ok(())
 }
 
 
 /// Sends a message from this chain to wormhole.
-fn complete_transfer_and_swap(id: &Pubkey, accs: &[AccountInfo], payload: Vec<u8>) -> ProgramResult {
+fn complete_transfer_and_swap(_id: &Pubkey, accs: &[AccountInfo]) -> ProgramResult {
     let accounts = &mut accs.iter();
     // Read remaining unreferenced accounts.
     let _payer = next_account_info(accounts)?;
