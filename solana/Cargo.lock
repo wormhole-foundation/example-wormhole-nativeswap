@@ -2786,6 +2786,7 @@ dependencies = [
  "bstr",
  "byteorder",
  "primitive-types",
+ "rand 0.7.3",
  "rocksalt",
  "serde",
  "sha3",
@@ -3246,8 +3247,8 @@ name = "wormhole-nativeswap"
 version = "0.1.0"
 dependencies = [
  "borsh",
+ "getrandom 0.1.16",
  "nom",
- "rand 0.7.3",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
