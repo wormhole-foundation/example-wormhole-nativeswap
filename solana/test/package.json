@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@certusone/wormhole-sdk": "^0.2.4",
+    "@solana/spl-token": "^0.2.0",
+    "@solana/web3.js": "^1.37.1",
+    "ethers": "^5.4.1",
+    "wormhole-nativeswap": "file:../nodejs"
+  }
+}

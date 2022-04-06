@@ -16,7 +16,9 @@ borsh          = "=0.9.1"
 solana-program = { version="=1.9.4" }
 nom            = { version="7", default-features=false, features=["alloc"] }
 wasm-bindgen   = { version = "0.2.74", features = ["serde-serialize"] }
+solitaire   = { git = "https://github.com/certusone/wormhole", branch="feat/solana-payload" }
 wormhole-sdk   = { git = "https://github.com/certusone/wormhole", branch="feat/solana-payload", features = ["testnet", "solana"] }
+wormhole-bridge-solana = { git = "https://github.com/certusone/wormhole", branch="feat/solana-payload", features = ["no-entrypoint", "cpi"] }
 token-bridge   = { git = "https://github.com/certusone/wormhole", branch="feat/solana-payload", features = ["no-entrypoint", "cpi"] }
 getrandom      = { version = "0.1.16", features = ["dummy"] }
 

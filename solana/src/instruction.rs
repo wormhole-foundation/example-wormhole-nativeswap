@@ -1,5 +1,8 @@
 use borsh::BorshSerialize;
-use solana_program::instruction::Instruction;
+use solana_program::instruction::{
+    AccountMeta,
+    Instruction
+};
 use solana_program::pubkey::Pubkey;
 use wormhole_sdk::{
     PostVAAData
@@ -17,7 +20,7 @@ use token_bridge::{
         complete_wrapped_with_payload
     },
     messages::{
-        PayloadTransfer,
+        PayloadTransferWithPayload,
     }
 };
 
@@ -30,13 +33,14 @@ pub fn complete_transfer_and_swap(
     payer: Pubkey,
     message_key: Pubkey,
     vaa: PostVAAData,
-    payload: PayloadTransfer,
+    payload: PayloadTransferWithPayload,
     to: Pubkey,
     to_owner: Pubkey,
     fee_recipient: Option<Pubkey>,
     data: CompleteWrappedData,
 ) -> Instruction {
-    let ix = complete_wrapped_with_payload(
+    // Piggyback of the CompleteWrappedWithPayload instruction which we plan to call internally
+    let mut ix = complete_wrapped_with_payload(
         token_bridge_id,
         bridge_id,
         payer,
@@ -48,7 +52,10 @@ pub fn complete_transfer_and_swap(
         fee_recipient,
         CompleteWrappedData {},
     ).unwrap();
-    
+    // Expects the program to be signer, but the program will sign internally
+    ix.accounts[6].is_signer = false;
+    // Our transaction additionally needs the Token Bridge address
+    ix.accounts.push(AccountMeta::new_readonly(token_bridge_id, false));
     Instruction {
         program_id,
         accounts: ix.accounts,

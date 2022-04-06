@@ -32,21 +32,22 @@ pub mod instruction;
 #[derive(BorshSerialize, BorshDeserialize, Clone)]
 pub enum Instruction {
     /// CompleteTransferAndSwap
-    /// 0: Payer         [Signer]
-    /// 1: Worm Config   [Worm PDA]
-    /// 2: VAA           [Worm PDA]
-    /// 3: Claim         [Token Bridge PDA]
-    /// 4: Chain         [Token Bridge PDA] Derived from chainId, 32bytes data.
-    /// 5: To            [this program's ATA]
-    /// 6: To Fees       [relayer's ATA]
-    /// 7: Mint          [SPL PDA]
-    /// 8: Wrapped Meta  [Metaplex PDA]
-    /// 9: Mint Authority[this program's PDA]
-    /// 10: Token Bridge  [Program]   -- Needed for invoke_signed.
-    /// 11: Rent          [Program]   -- Needed for claim account.
-    /// 12: System        [Program]   -- Needed for invoke_signed.
-    /// 13: Wormhole      [Program]   -- Needed for invoke_signed.
-    /// 14: SPL           [Program]   -- Needed for invoke_signed.
+    /// 0: Payer           [Signer]
+    /// 1: Worm Config     [Worm PDA]
+    /// 2: VAA             [Worm PDA]
+    /// 3: Claim           [Token Bridge PDA]
+    /// 4: Chain           [Token Bridge PDA] Derived from chainId, 32bytes data.
+    /// 5: To              [this program's ATA]
+    /// 6: To Owner        [this program]
+    /// 7: To Fees         [relayer's ATA]
+    /// 8: Mint            [SPL PDA]
+    /// 9: Wrapped Meta    [Metaplex PDA]
+    /// 10: Mint Authority [this program's PDA]
+    /// 11: Rent           [Program]   -- Needed for claim account.
+    /// 12: System         [Program]   -- Needed for invoke_signed.
+    /// 13: Wormhole       [Program]   -- Needed for invoke_signed.
+    /// 14: SPL            [Program]   -- Needed for invoke_signed.
+    /// 15: Token Bridge   [Program]   -- Needed for invoke_signed.
     CompleteTransferAndSwap,
 }
 
@@ -73,15 +74,16 @@ fn complete_transfer_and_swap(_id: &Pubkey, accs: &[AccountInfo]) -> ProgramResu
     let _claim = next_account_info(accounts)?;
     let _chain = next_account_info(accounts)?;
     let _to = next_account_info(accounts)?;
+    let _to_owner = next_account_info(accounts)?; //TODO: shouldn't need to specify this in accounts, as it should match program_id
     let _to_fees = next_account_info(accounts)?;
     let _mint = next_account_info(accounts)?;
     let _wrapped_meta = next_account_info(accounts)?;
     let _mint_authority = next_account_info(accounts)?;
-    let _token_bridge = next_account_info(accounts)?;
     let _rent = next_account_info(accounts)?;
     let _system = next_account_info(accounts)?;
     let _wormhole = next_account_info(accounts)?;
     let _spl = next_account_info(accounts)?;
+    let _token_bridge = next_account_info(accounts)?;
     
     Ok(())
 }
