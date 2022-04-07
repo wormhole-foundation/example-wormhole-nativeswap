@@ -62,7 +62,7 @@ import {
 const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA =
   "terra163shc8unyqrndgcldaj2q9kgnqs82v0kgkhynf";
 export const CROSSCHAINSWAP_CONTRACT_ADDRESS_SOLANA =
-  "EzFrDybhcqtJjdfc8MgqrDuQUGHRUsD94HZbKzVTJitu";
+  "92XVWWdN47dL38HLZ277rdRJh7RUG2ikmiBRoUGrKXif";
 
 function makeNullSwapPath(): any[] {
   const zeroBuffer = Buffer.alloc(20);
