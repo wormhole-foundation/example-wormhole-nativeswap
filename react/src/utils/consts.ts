@@ -5,7 +5,9 @@ import {
   CHAIN_ID_TERRA,
   CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
+  CHAIN_ID_SOLANA,
 } from "@certusone/wormhole-sdk";
+import { clusterApiUrl } from "@solana/web3.js";
 
 export const EVM_POLYGON_NETWORK_CHAIN_ID = 80001;
 export const EVM_ETH_NETWORK_CHAIN_ID = 5;
@@ -71,6 +73,16 @@ export const UST_TOKEN_INFO: TokenInfo = {
   ustPairedAddress: undefined,
 };
 
+export const SOL_UST_TOKEN_INFO: TokenInfo = {
+  name: "SOL UST",
+  address: "5Dmmc5CC6ZpKif8iN5DSY9qNYrWJvEKcX2JrxGESqRMu",
+  chainId: CHAIN_ID_SOLANA,
+  evmChainId: undefined,
+  //logo: solIcon,
+  maxAmount: 0.01,
+  ustPairedAddress: undefined,
+};
+
 export const TOKEN_INFOS = [
   MATIC_TOKEN_INFO,
   ETH_TOKEN_INFO,
@@ -78,6 +90,8 @@ export const TOKEN_INFOS = [
   BNB_TOKEN_INFO,
   // TODO: support swaps from/to terra
   // UST_TOKEN_INFO,
+  // TODO: support swaps from/to Solana
+  SOL_UST_TOKEN_INFO,
 ];
 
 export const getSupportedSwaps = (tokenInfo: TokenInfo) => {
@@ -136,6 +150,9 @@ export const CORE_BRIDGE_ADDRESS_BSC =
 export const CORE_BRIDGE_ADDRESS_TERRA =
   "terra1pd65m0q9tl3v8znnz5f5ltsfegyzah7g42cx5v";
 
+export const CORE_BRIDGE_ADDRESS_SOLANA =
+  "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5";
+
 // token bridge
 export const TOKEN_BRIDGE_ADDRESS_ETHEREUM =
   "0xF890982f9310df57d00f659cf4fd87e65adEd8d7";
@@ -152,5 +169,10 @@ export const TOKEN_BRIDGE_ADDRESS_AVALANCHE =
 export const TOKEN_BRIDGE_ADDRESS_TERRA =
   "terra1pseddrv0yfsn76u4zxrjmtf45kdlmalswdv39a";
 
+export const TOKEN_BRIDGE_ADDRESS_SOLANA =
+  "DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe";
+
 // gas
 export const APPROVAL_GAS_LIMIT = "100000";
+
+export const SOLANA_HOST = clusterApiUrl("devnet");

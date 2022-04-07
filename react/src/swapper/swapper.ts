@@ -1,44 +1,54 @@
 //@ts-nocheck
-import { ethers } from "ethers";
-import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import {
   ChainId,
-  CHAIN_ID_ETH,
-  CHAIN_ID_POLYGON,
   CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
+  CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
+  CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
   getEmitterAddressEth,
+  getSignedVAAWithRetry,
   hexToUint8Array,
   nativeToHexString,
   parseSequenceFromLogEth,
-  getSignedVAAWithRetry,
 } from "@certusone/wormhole-sdk";
+import { TransactionReceipt } from "@ethersproject/abstract-provider";
 import { grpc } from "@improbable-eng/grpc-web";
+import { ethers } from "ethers";
+import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
+import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_BSC } from "../addresses/bsc";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_AVALANCHE } from "../addresses/fuji";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
+import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
 import {
-  PROTOCOL_UNISWAP_V2,
   // PROTOCOL_UNISWAP_V3,
   ExactInCrossParameters,
   ExactOutCrossParameters,
+  PROTOCOL_UNISWAP_V2,
   QuoteType,
   UniswapToUniswapQuoter,
 } from "../route/cross-quote";
+import { makeErc20Contract } from "../route/evm";
 import {
-  TOKEN_BRIDGE_ADDRESS_ETHEREUM,
-  TOKEN_BRIDGE_ADDRESS_POLYGON,
-  TOKEN_BRIDGE_ADDRESS_TERRA,
-  TOKEN_BRIDGE_ADDRESS_AVALANCHE,
-  TOKEN_BRIDGE_ADDRESS_BSC,
-  CORE_BRIDGE_ADDRESS_ETHEREUM,
-  CORE_BRIDGE_ADDRESS_POLYGON,
-  CORE_BRIDGE_ADDRESS_TERRA,
   CORE_BRIDGE_ADDRESS_AVALANCHE,
   CORE_BRIDGE_ADDRESS_BSC,
-  WORMHOLE_RPC_HOSTS,
+  CORE_BRIDGE_ADDRESS_ETHEREUM,
+  CORE_BRIDGE_ADDRESS_POLYGON,
+  CORE_BRIDGE_ADDRESS_SOLANA,
+  CORE_BRIDGE_ADDRESS_TERRA,
+  TOKEN_BRIDGE_ADDRESS_AVALANCHE,
+  TOKEN_BRIDGE_ADDRESS_BSC,
+  TOKEN_BRIDGE_ADDRESS_ETHEREUM,
+  TOKEN_BRIDGE_ADDRESS_POLYGON,
+  TOKEN_BRIDGE_ADDRESS_SOLANA,
+  TOKEN_BRIDGE_ADDRESS_TERRA,
   //ETH_NETWORK_CHAIN_ID,
   //POLYGON_NETWORK_CHAIN_ID,
   //TERRA_NETWORK_CHAIN_ID,
   UST_TOKEN_INFO,
+  WORMHOLE_RPC_HOSTS,
 } from "../utils/consts";
 import {
   evmSwapExactInFromVaaNative,
@@ -47,17 +57,12 @@ import {
   evmSwapExactOutFromVaaToken,
   getEvmGasParametersForContract,
 } from "./helpers";
-import { abi as SWAP_CONTRACT_V2_ABI } from "../abi/contracts/CrossChainSwapV2.json";
-import { abi as SWAP_CONTRACT_V3_ABI } from "../abi/contracts/CrossChainSwapV3.json";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM } from "../addresses/goerli";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON } from "../addresses/mumbai";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_AVALANCHE } from "../addresses/fuji";
-import { SWAP_CONTRACT_ADDRESS as CROSSCHAINSWAP_CONTRACT_ADDRESS_BSC } from "../addresses/bsc";
-import { makeErc20Contract } from "../route/evm";
 
 // placeholders
 const CROSSCHAINSWAP_CONTRACT_ADDRESS_TERRA =
   "terra163shc8unyqrndgcldaj2q9kgnqs82v0kgkhynf";
+export const CROSSCHAINSWAP_CONTRACT_ADDRESS_SOLANA =
+  "EzFrDybhcqtJjdfc8MgqrDuQUGHRUsD94HZbKzVTJitu";
 
 function makeNullSwapPath(): any[] {
   const zeroBuffer = Buffer.alloc(20);
@@ -137,6 +142,17 @@ const EXECUTION_PARAMETERS_TERRA: ExecutionParameters = {
   },
 };
 
+const EXECUTION_PARAMETERS_SOLANA: ExecutionParameters = {
+  crossChainSwap: {
+    address: CROSSCHAINSWAP_CONTRACT_ADDRESS_SOLANA,
+  },
+  wormhole: {
+    chainId: CHAIN_ID_SOLANA,
+    coreBridgeAddress: CORE_BRIDGE_ADDRESS_SOLANA,
+    tokenBridgeAddress: TOKEN_BRIDGE_ADDRESS_SOLANA,
+  },
+};
+
 function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
   switch (chainId) {
     case CHAIN_ID_ETH: {
@@ -153,6 +169,9 @@ function makeExecutionParameters(chainId: ChainId): ExecutionParameters {
     }
     case CHAIN_ID_TERRA: {
       return EXECUTION_PARAMETERS_TERRA;
+    }
+    case CHAIN_ID_SOLANA: {
+      return EXECUTION_PARAMETERS_SOLANA;
     }
     default: {
       throw Error("unrecognized chain id");

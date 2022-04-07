@@ -11,6 +11,7 @@ import {
   AVAX_TOKEN_INFO,
   BNB_TOKEN_INFO,
   UST_TOKEN_INFO,
+  SOL_UST_TOKEN_INFO,
 } from "../utils/consts";
 import { addFixedAmounts, subtractFixedAmounts } from "../utils/math";
 import { UstLocation } from "./generic";
@@ -27,13 +28,16 @@ import {
   CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_TERRA,
+  CHAIN_ID_SOLANA,
 } from "@certusone/wormhole-sdk";
+import { SolUstTransfer } from "./sol-ust-transfer";
 
 export { PROTOCOL as PROTOCOL_UNISWAP_V2 } from "./uniswap-v2";
 export { PROTOCOL as PROTOCOL_UNISWAP_V3 } from "./uniswap-v3";
 export { PROTOCOL as PROTOCOL_TERRA_UST_TRANSFER } from "./terra-ust-transfer";
 
 export const TERRA_UST = UST_TOKEN_INFO.address;
+export const SOLANA_UST = SOL_UST_TOKEN_INFO.address;
 
 export enum QuoteType {
   ExactIn = 1,
@@ -93,6 +97,9 @@ export function getChainIdFromAddress(tokenAddress: string) {
     case UST_TOKEN_INFO.address: {
       return CHAIN_ID_TERRA;
     }
+    case SOL_UST_TOKEN_INFO.address: {
+      return CHAIN_ID_SOLANA;
+    }
     default: {
       throw Error("unrecognized evm token address");
     }
@@ -127,6 +134,9 @@ async function makeRouter(tokenAddress: string, loc: UstLocation) {
     }
     case UST_TOKEN_INFO.address: {
       return new UstRouter();
+    }
+    case SOL_UST_TOKEN_INFO.address: {
+      return new SolUstTransfer();
     }
     default: {
       throw Error("unrecognized chain id");
@@ -368,11 +378,15 @@ export class UniswapToUniswapQuoter {
   }
 
   isSrcUst(): boolean {
-    return this.tokenInAddress === TERRA_UST;
+    return (
+      this.tokenInAddress === TERRA_UST || this.tokenInAddress === SOLANA_UST
+    );
   }
 
   isDstUst(): boolean {
-    return this.tokenOutAddress === TERRA_UST;
+    return (
+      this.tokenOutAddress === TERRA_UST || this.tokenOutAddress === SOLANA_UST
+    );
   }
 
   getSrcEvmProvider(): ethers.providers.Provider | undefined {

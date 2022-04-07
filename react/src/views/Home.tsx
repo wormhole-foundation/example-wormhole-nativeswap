@@ -1,4 +1,12 @@
 import {
+  ChainId,
+  CHAIN_ID_SOLANA,
+  CHAIN_ID_TERRA,
+  getSignedVAAWithRetry,
+  isEVMChain,
+} from "@certusone/wormhole-sdk";
+import { Web3Provider } from "@ethersproject/providers";
+import {
   Collapse,
   Container,
   Link,
@@ -7,43 +15,44 @@ import {
   TextField,
   Typography,
 } from "@material-ui/core";
+import { ArrowForward, CheckCircleOutlineRounded } from "@material-ui/icons";
+import { Alert } from "@material-ui/lab";
 import {
-  ChainId,
-  CHAIN_ID_TERRA,
-  getSignedVAAWithRetry,
-  isEVMChain,
-} from "@certusone/wormhole-sdk";
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  Token,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
+import { hexlify, hexStripZeros } from "ethers/lib/utils";
+import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import ButtonWithLoader from "../components/ButtonWithLoader";
+import CircleLoader from "../components/CircleLoader";
 import EthereumSignerKey from "../components/EthereumSignerKey";
+import Footer from "../components/Footer";
+import Settings from "../components/Settings";
+import SolanaWalletKey from "../components/SolanaWalletKey";
+import SwapProgress from "../components/SwapProgress";
+import TerraWalletKey from "../components/TerraWalletKey";
 import TokenSelect from "../components/TokenSelect";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
+import useIsWalletReady from "../hooks/useIsWalletReady";
+import { COLORS } from "../muiTheme";
+import { UniswapToUniswapExecutor } from "../swapper/swapper";
 import {
   ETH_TOKEN_INFO,
   getEvmChainId,
   getSupportedSwaps,
   MATIC_TOKEN_INFO,
   RELAYER_FEE_UST,
+  SOL_UST_TOKEN_INFO,
   TokenInfo,
   TOKEN_INFOS,
   WORMHOLE_RPC_HOSTS,
 } from "../utils/consts";
-import { COLORS } from "../muiTheme";
-import { UniswapToUniswapExecutor } from "../swapper/swapper";
-import { Web3Provider } from "@ethersproject/providers";
-import { hexlify, hexStripZeros } from "ethers/lib/utils";
-import { useDebouncedCallback } from "use-debounce";
-import { useSnackbar } from "notistack";
-import { Alert } from "@material-ui/lab";
-import parseError from "../utils/parseError";
-import Settings from "../components/Settings";
 import getIsTransferCompletedEvmWithRetry from "../utils/getIsTransferCompletedWithRetry";
-import CircleLoader from "../components/CircleLoader";
-import { ArrowForward, CheckCircleOutlineRounded } from "@material-ui/icons";
-import SwapProgress from "../components/SwapProgress";
-import Footer from "../components/Footer";
-import TerraWalletKey from "../components/TerraWalletKey";
-import useIsWalletReady from "../hooks/useIsWalletReady";
+import parseError from "../utils/parseError";
 
 const useStyles = makeStyles((theme) => ({
   bg: {
@@ -206,6 +215,8 @@ const SwapButton = ({
       <EthereumSignerKey />
     ) : source.chainId === CHAIN_ID_TERRA ? (
       <TerraWalletKey />
+    ) : source.chainId === CHAIN_ID_SOLANA ? (
+      <SolanaWalletKey />
     ) : null;
   }
 
@@ -215,8 +226,10 @@ const SwapButton = ({
   ) {
     return isEVMChain(target.chainId) ? (
       <EthereumSignerKey />
-    ) : source.chainId === CHAIN_ID_TERRA ? (
+    ) : target.chainId === CHAIN_ID_TERRA ? (
       <TerraWalletKey />
+    ) : target.chainId === CHAIN_ID_SOLANA ? (
+      <SolanaWalletKey />
     ) : null;
   }
 
@@ -255,6 +268,14 @@ export default function Home() {
   >(undefined);
   const [hasSignedVAA, setHasSignedVAA] = useState(false);
   const [relayerTimeoutString, setRelayerTimeoutString] = useState("");
+  const targetChainId =
+    isEVMChain(sourceTokenInfo.chainId) && isEVMChain(targetTokenInfo.chainId)
+      ? sourceTokenInfo.chainId
+      : targetTokenInfo.chainId;
+  const { walletAddress: destinationWalletAddress } = useIsWalletReady(
+    targetChainId,
+    false
+  );
 
   const computeQuote = useCallback(() => {
     (async () => {
@@ -371,7 +392,13 @@ export default function Home() {
   }, [disconnect]);
 
   const handleSwapClick = useCallback(async () => {
-    if (provider && signer && signerAddress && executor) {
+    if (
+      provider &&
+      signer &&
+      signerAddress &&
+      destinationWalletAddress &&
+      executor
+    ) {
       try {
         setIsSwapping(true);
         setIsSourceSwapComplete(false);
@@ -379,11 +406,24 @@ export default function Home() {
         setIsTargetSwapComplete(false);
         setRelayerTimeoutString("");
         await switchEvmProviderNetwork(provider, sourceTokenInfo.chainId);
-        console.log(signerAddress);
+
+        let recipientAddress = destinationWalletAddress;
+        if (targetChainId === CHAIN_ID_SOLANA) {
+          // compute associated token account (only for UST right now)
+          recipientAddress = (
+            await Token.getAssociatedTokenAddress(
+              ASSOCIATED_TOKEN_PROGRAM_ID,
+              TOKEN_PROGRAM_ID,
+              new PublicKey(SOL_UST_TOKEN_INFO.address),
+              new PublicKey(recipientAddress)
+            )
+          ).toString();
+        }
+        console.log(destinationWalletAddress, targetChainId, recipientAddress);
 
         const sourceReceipt = await executor.evmApproveAndSwap(
           signer,
-          signerAddress
+          recipientAddress
         );
         console.info(
           "firstSwapTransactionHash:",
@@ -399,6 +439,7 @@ export default function Home() {
           executor.vaaSearchParams.emitterAddress,
           executor.vaaSearchParams.sequence
         );
+        console.log(Buffer.from(vaaBytes).toString("hex"));
         setHasSignedVAA(true);
         //  Check if the signedVAA has redeemed by the relayer
         const isCompleted = await getIsTransferCompletedEvmWithRetry(
@@ -441,6 +482,8 @@ export default function Home() {
     sourceTokenInfo,
     targetTokenInfo,
     reset,
+    destinationWalletAddress,
+    targetChainId,
   ]);
 
   const readyToSwap = provider && signer && hasQuote;
