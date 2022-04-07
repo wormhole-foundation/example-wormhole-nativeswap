@@ -10,12 +10,14 @@ import {
   BNB_TOKEN_INFO,
   ETH_TOKEN_INFO,
   MATIC_TOKEN_INFO,
+  SOL_UST_TOKEN_INFO,
   TokenInfo,
   UST_TOKEN_INFO,
 } from "../utils/consts";
 
 import ethIcon from "../icons/eth.svg";
 import polygonIcon from "../icons/polygon.svg";
+import solanaIcon from "../icons/solana.svg";
 import terraIcon from "../icons/terra.svg";
 import bscIcon from "../icons/bsc.svg";
 import avaxIcon from "../icons/avax.svg";
@@ -48,6 +50,8 @@ const getLogo = (name: string) => {
       return avaxIcon;
     case BNB_TOKEN_INFO.name:
       return bscIcon;
+    case SOL_UST_TOKEN_INFO.name:
+      return solanaIcon;
     default:
       return "";
   }
