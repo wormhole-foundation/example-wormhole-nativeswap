@@ -1,7 +1,9 @@
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
-
-use crate::instruction::{
+use crate::api::{
+    CompleteTransferAndSwapData,
+};
+use crate::instructions::{
     complete_transfer_and_swap
 };
 
@@ -17,7 +19,6 @@ use solitaire::{
     AccountState,
 };
 use token_bridge::messages::PayloadTransferWithPayload;
-use token_bridge::CompleteWrappedData;
 
 use wasm_bindgen::prelude::*;
 
@@ -27,7 +28,6 @@ pub fn complete_transfer_and_swap_ix(
     program_id: String,
     token_bridge_id: String,
     bridge_id: String,
-    to: String,
     payer: String,
     vaa: Vec<u8>,
     fee_recipient: Option<String>,
@@ -35,7 +35,6 @@ pub fn complete_transfer_and_swap_ix(
     let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
     let token_bridge_id = Pubkey::from_str(token_bridge_id.as_str()).unwrap();
     let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
-    let to = Pubkey::from_str(to.as_str()).unwrap();
     let payer = Pubkey::from_str(payer.as_str()).unwrap();
     let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
     let payload = PayloadTransferWithPayload::deserialize(&mut vaa.payload.as_slice()).unwrap();
@@ -64,14 +63,12 @@ pub fn complete_transfer_and_swap_ix(
         message_key,
         post_vaa_data,
         payload.clone(),
-        to, // an ATA of the program for the mint key from the vaa
-        program_id, // program_id should be the owner
         if let Some(fee_r) = fee_recipient {
             Some(Pubkey::from_str(fee_r.as_str()).unwrap())
         } else {
             None
         },
-        CompleteWrappedData {},
+        CompleteTransferAndSwapData {},
     );
     return JsValue::from_serde(&ix).unwrap();
 }

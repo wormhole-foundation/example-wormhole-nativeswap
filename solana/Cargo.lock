@@ -1849,7 +1849,7 @@ dependencies = [
 [[package]]
 name = "rocksalt"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "byteorder",
  "proc-macro2",
@@ -2568,7 +2568,7 @@ dependencies = [
 [[package]]
 name = "solitaire"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "borsh",
  "byteorder",
@@ -2600,7 +2600,7 @@ dependencies = [
 [[package]]
 name = "spl-token-metadata"
 version = "0.0.1"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "borsh",
  "solana-program",
@@ -2780,7 +2780,7 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "token-bridge"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "borsh",
  "bstr",
@@ -3218,7 +3218,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-solana"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "borsh",
  "byteorder",
@@ -3232,7 +3232,7 @@ dependencies = [
 [[package]]
 name = "wormhole-core"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "bstr",
  "byteorder",
@@ -3253,6 +3253,7 @@ dependencies = [
  "solana-program-test",
  "solana-sdk",
  "solitaire",
+ "spl-token",
  "token-bridge",
  "wasm-bindgen",
  "wormhole-bridge-solana",
@@ -3262,7 +3263,7 @@ dependencies = [
 [[package]]
 name = "wormhole-sdk"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#c5165b8cc8a1b8134ee55f1874f943fda406fb44"
+source = "git+https://github.com/certusone/wormhole?branch=feat/solana-payload#2e24f11fa045ac8460347d9796a4ecdb7931a154"
 dependencies = [
  "borsh",
  "nom",

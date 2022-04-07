@@ -14,6 +14,7 @@ wasm = ["no-entrypoint"]
 [dependencies]
 borsh          = "=0.9.1"
 solana-program = { version="=1.9.4" }
+spl-token = { version = "=3.2.0", features = ["no-entrypoint"] }
 nom            = { version="7", default-features=false, features=["alloc"] }
 wasm-bindgen   = { version = "0.2.74", features = ["serde-serialize"] }
 solitaire   = { git = "https://github.com/certusone/wormhole", branch="feat/solana-payload" }
