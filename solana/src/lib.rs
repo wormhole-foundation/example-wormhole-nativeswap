@@ -13,14 +13,32 @@ pub mod wasm;
 pub mod instructions;
 
 pub mod api;
+pub mod double_claim_vaa;
 
 pub use api::{
-    complete_transfer_and_swap,
-    CompleteTransferAndSwap
+    complete_transfer,
+    complete_no_swap,
+    CompleteTransfer,
+    CompleteNoSwap
 };
 
 use solitaire::*;
+//use std::error::Error;
+
+pub enum NativeSwapError {
+    TokenBridgeNotClaimed,
+    VAAAlreadyExecuted,
+}
+
+impl From<NativeSwapError> for SolitaireError {
+    fn from(t: NativeSwapError) -> SolitaireError {
+        SolitaireError::Custom(t as u64)
+    }
+}
+
 
 solitaire! {
-    CompleteTransferAndSwap => complete_transfer_and_swap,
+    CompleteTransfer => complete_transfer,
+    CompleteNoSwap => complete_no_swap,
+
 }

@@ -67,7 +67,7 @@ impl<'b> Seeded<&TokenBridgeMintSignerDerivationData>
 }
 
 #[derive(FromAccounts)]
-pub struct CompleteTransferAndSwap<'b> {
+pub struct CompleteTransfer<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: TokenBridgeConfigAccount<'b, { AccountState::Initialized }>,
 
@@ -87,8 +87,8 @@ pub struct CompleteTransferAndSwap<'b> {
     pub token_bridge: Info<'b>,
 }
 
-impl<'a> From<&CompleteTransferAndSwap<'a>> for EndpointDerivationData {
-    fn from(accs: &CompleteTransferAndSwap<'a>) -> Self {
+impl<'a> From<&CompleteTransfer<'a>> for EndpointDerivationData {
+    fn from(accs: &CompleteTransfer<'a>) -> Self {
         EndpointDerivationData {
             emitter_chain: accs.vaa.meta().emitter_chain,
             emitter_address: accs.vaa.meta().emitter_address,
@@ -96,8 +96,8 @@ impl<'a> From<&CompleteTransferAndSwap<'a>> for EndpointDerivationData {
     }
 }
 
-impl<'a> From<&CompleteTransferAndSwap<'a>> for WrappedDerivationData {
-    fn from(accs: &CompleteTransferAndSwap<'a>) -> Self {
+impl<'a> From<&CompleteTransfer<'a>> for WrappedDerivationData {
+    fn from(accs: &CompleteTransfer<'a>) -> Self {
         WrappedDerivationData {
             token_chain: accs.vaa.token_chain,
             token_address: accs.vaa.token_address,
@@ -105,25 +105,30 @@ impl<'a> From<&CompleteTransferAndSwap<'a>> for WrappedDerivationData {
     }
 }
 
-impl<'a> From<&CompleteTransferAndSwap<'a>> for CustodyAccountDerivationData {
-    fn from(accs: &CompleteTransferAndSwap<'a>) -> Self {
+impl<'a> From<&CompleteTransfer<'a>> for CustodyAccountDerivationData {
+    fn from(accs: &CompleteTransfer<'a>) -> Self {
         CustodyAccountDerivationData {
             mint: *accs.mint.info().key,
         }
     }
 }
 
-impl<'b> InstructionContext<'b> for CompleteTransferAndSwap<'b> {
+impl<'b> InstructionContext<'b> for CompleteTransfer<'b> {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
-pub struct CompleteTransferAndSwapData {}
+pub struct CompleteTransferData {}
 
-pub fn complete_transfer_and_swap(
+pub fn complete_transfer(
     ctx: &ExecutionContext,
-    accs: &mut CompleteTransferAndSwap,
-    _data: CompleteTransferAndSwapData,
+    accs: &mut CompleteTransfer,
+    _data: CompleteTransferData,
 ) -> Result<()> {
+
+    let bridge_id = ctx.accounts[14].info().key;
+    let message_key = ctx.accounts[2].info().key;
+    msg!("bridge_id: {:?}", bridge_id);
+    msg!("message_key: {:?}", message_key);
     // Verify that the custody account is derived correctly
     let derivation_data: CustodyAccountDerivationData = (&*accs).into();
     accs.custody
@@ -142,13 +147,9 @@ pub fn complete_transfer_and_swap(
         invoke_signed(&init_ix, ctx.accounts, &[])?;
     }
 
-    
     // see https://github.com/certusone/wormhole/blob/2e24f11fa045ac8460347d9796a4ecdb7931a154/solana/modules/token_bridge/program/src/instructions.rs#L312-L338
     // TODO: maybe there's a better way to rebuild this off our list of accounts which should be nearly compatible
-    let bridge_id = ctx.accounts[14].info().key;
-    let message_key = ctx.accounts[2].info().key;
-    msg!("bridge_id: {:?}", bridge_id);
-    msg!("message_key: {:?}", message_key);
+
     let transfer_ix = Instruction {
         program_id: *accs.token_bridge.info().key,
         accounts: vec![

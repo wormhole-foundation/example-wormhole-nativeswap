@@ -43,16 +43,16 @@
     5
   );
 
-  const ix_json = wasm.complete_transfer_and_swap_ix(
+  const transfer_ix_json = wasm.complete_transfer_ix(
     nativeSwapProgram,
     tokenBridge,
     coreBridge,
     payer.publicKey.toString(), // Devnet Wallet
     sdk.hexToUint8Array(PAYLOAD_3_VAA_TO_SOLANA_WITH_CUSTODY_SIGNER)
   );
-  console.log(ix_json);
+  console.log(transfer_ix_json);
   console.log(
-    ix_json.accounts.map(({ pubkey, is_signer, is_writable }) => [
+    transfer_ix_json.accounts.map(({ pubkey, is_signer, is_writable }) => [
       sdk.hexToNativeString(
         sdk.uint8ArrayToHex(new Uint8Array(pubkey)),
         sdk.CHAIN_ID_SOLANA
@@ -61,20 +61,32 @@
       is_writable,
     ])
   );
-  // console.log(
-  //   (
-  //     await sdk.redeemOnSolana(
-  //       connection,
-  //       coreBridge,
-  //       tokenBridge,
-  //       payer.publicKey.toString(),
-  //       sdk.hexToUint8Array(PAYLOAD_1_VAA)
-  //     )
-  //   ).instructions[0].keys.map(({ pubkey }) => pubkey.toString())
-  // );
-  const ix = sdk.ixFromRust(ix_json);
 
-  const transaction = new web3s.Transaction().add(ix);
+
+  const no_swap_ix_json = wasm.complete_no_swap_ix(
+    nativeSwapProgram,
+    tokenBridge,
+    coreBridge,
+    payer.publicKey.toString(), // Devnet Wallet
+    sdk.hexToUint8Array(PAYLOAD_3_VAA_TO_SOLANA_WITH_CUSTODY_SIGNER)
+  );
+  console.log(no_swap_ix_json);
+  console.log(
+    no_swap_ix_json.accounts.map(({ pubkey, is_signer, is_writable }) => [
+      sdk.hexToNativeString(
+        sdk.uint8ArrayToHex(new Uint8Array(pubkey)),
+        sdk.CHAIN_ID_SOLANA
+      ),
+      is_signer,
+      is_writable,
+    ])
+  );
+  
+
+  const transfer_ix = sdk.ixFromRust(transfer_ix_json);
+  const no_swap_ix = sdk.ixFromRust(no_swap_ix_json);
+
+  const transaction = new web3s.Transaction().add(no_swap_ix);
   const { blockhash } = await connection.getLatestBlockhash();
   transaction.recentBlockhash = blockhash;
   transaction.feePayer = payer.publicKey;
