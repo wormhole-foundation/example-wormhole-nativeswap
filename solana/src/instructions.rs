@@ -29,6 +29,7 @@ use solitaire::{
     processors::seeded::Seeded,
     *,
 };
+use std::convert::TryInto;
 
 use bridge::{
     Claim,
@@ -117,6 +118,9 @@ pub fn complete_no_swap(
         &program_id,
     );
 
+    let to_key = Pubkey::new_from_array(payload.payload[32..64].try_into().expect("blah blah"));
+
+    
     // Piggyback of the CompleteWrappedWithPayload instruction which we plan to call internally
     let mut ix = complete_wrapped_with_payload(
         token_bridge_id,
@@ -127,9 +131,14 @@ pub fn complete_no_swap(
         payload.clone(),
         custody_key,
         custody_signer_key,
-        fee_recipient,
+        if let Some(fee_r) = fee_recipient {
+            Some(fee_r)
+        } else {
+            Some(to_key)
+        },
         CompleteWrappedData {},
     ).unwrap();
+
     // Token bridge claim is not writable 
     ix.accounts[3].is_writable = false;
     // Expects the program to be signer, but the program will sign internally
@@ -138,6 +147,10 @@ pub fn complete_no_swap(
     ix.accounts.insert(4,AccountMeta::new(claim_key, false));
     // Our transaction additionally needs the Token Bridge address, insert before dependencies
     ix.accounts.insert(12,AccountMeta::new_readonly(token_bridge_id, false));
+    ix.accounts.insert(13,AccountMeta::new(to_key, false));
+
+    //ix.accounts[7].is_writable = true;
+
     Instruction {
         program_id,
         accounts: ix.accounts,
