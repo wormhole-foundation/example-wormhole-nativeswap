@@ -4,11 +4,11 @@ use bridge::{
 use token_bridge::{
     accounts::*,
     api::{
-        complete_transfer::{
-            CompleteWrappedData,
+        complete_transfer_payload::{
+            CompleteWrappedWithPayloadData,
         },
     },
-    instruction::Instruction::CompleteWrapped,
+    instruction::Instruction::CompleteWrappedWithPayload,
     messages::{
         PayloadTransferWithPayload,
     },
@@ -142,6 +142,7 @@ pub fn complete_transfer_and_swap(
         invoke_signed(&init_ix, ctx.accounts, &[])?;
     }
 
+    
     // see https://github.com/certusone/wormhole/blob/2e24f11fa045ac8460347d9796a4ecdb7931a154/solana/modules/token_bridge/program/src/instructions.rs#L312-L338
     // TODO: maybe there's a better way to rebuild this off our list of accounts which should be nearly compatible
     let bridge_id = ctx.accounts[14].info().key;
@@ -169,9 +170,10 @@ pub fn complete_transfer_and_swap(
             AccountMeta::new_readonly(*bridge_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: (CompleteWrapped, CompleteWrappedData {}).try_to_vec()?,
+        data: (CompleteWrappedWithPayload, CompleteWrappedWithPayloadData {}).try_to_vec()?,
     };
-    invoke_signed(&transfer_ix, ctx.accounts, &[])?;
     
+    //invoke_signed(&transfer_ix, ctx.accounts, &[])?;
+    invoke_seeded(&transfer_ix, ctx, &accs.custody_signer, None)?;
     Ok(())
 }
