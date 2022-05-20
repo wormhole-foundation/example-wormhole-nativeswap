@@ -1,3 +1,5 @@
+const { uint8ArrayToNative } = require("@certusone/wormhole-sdk");
+
 (async () => {
   const PAYLOAD_1_VAA =
     "01000000000100339c0d030b927eda9cb7ee53d266cbdc6d8f2a70a2a8031952a3a19ee3963d77030dfa8d70c134ef577f9db119cd606bf82ad593f6bb5addfc57f33e741e7e6201624b367c636d0000000b000000000000000000000000d11de1f930ea1f7dd0290fe3a2e35b9c91aefb37000000000000000c010100000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000337610d27c682e347c9cd60bd4b3b107c9d34ddd000400000000000000000000000012345756e90eba0c357d6ea5d537a179f9d6d0b000040000000000000000000000000000000000000000000000000000000000000000";
@@ -53,6 +55,7 @@
     sdk.hexToUint8Array(PAYLOAD_3_VAA_TO_SOLANA_WITH_CUSTODY_SIGNER2)
   );
   console.log(transfer_ix_json);
+  console.log("Program Id:", sdk.uint8ArrayToNative(transfer_ix_json.program_id, 1))
   console.log(
     transfer_ix_json.accounts.map(({ pubkey, is_signer, is_writable }) => [
       sdk.hexToNativeString(
@@ -84,7 +87,6 @@
     ])
   );
   
-
   const transfer_ix = sdk.ixFromRust(transfer_ix_json);
   const no_swap_ix = sdk.ixFromRust(no_swap_ix_json);
 

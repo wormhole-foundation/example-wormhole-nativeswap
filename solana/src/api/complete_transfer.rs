@@ -32,6 +32,9 @@ use solitaire::{
     *,
 };
 
+// have to create custom config account for the token bridge b/c the default ConfigAccount in solana/modules/token_bridge/program/src/accounts.rs 
+// is a derived account and assumes the program id is the ExecutionContext, 
+// which is normally the token bridge... but in this case would be NativeSwap.
 pub type TokenBridgeConfigAccount<'b, const STATE: AccountState> = Data<'b, Config, { STATE }>;
 
 pub struct TokenBridgeConfigAccountDerivationData {
@@ -49,7 +52,8 @@ impl<'b, const STATE: AccountState> Seeded<&TokenBridgeConfigAccountDerivationDa
     }
 }
 
-pub type TokenBridgeMintSigner<'b> = Info<'b>;
+//Info is short alias for AccountInfo from solana programs
+pub type TokenBridgeMintSigner<'b> = Info<'b>; 
 
 pub struct TokenBridgeMintSignerDerivationData {
     pub token_bridge: Pubkey,
@@ -66,6 +70,27 @@ impl<'b> Seeded<&TokenBridgeMintSignerDerivationData>
     }
 }
 
+/*
+#[derive(FromAccounts)]
+pub struct CompleteWrappedWithPayload<'b> {
+    pub payer: Mut<Signer<AccountInfo<'b>>>,
+    pub config: ConfigAccount<'b, { AccountState::Initialized }>,
+
+    // Signed message for the transfer
+    pub vaa: ClaimableVAA<'b, PayloadTransferWithPayload>,
+
+    pub chain_registration: Endpoint<'b, { AccountState::Initialized }>,
+
+    pub to: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,
+    pub to_owner: MaybeMut<Signer<Info<'b>>>,
+    pub to_fees: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,
+    pub mint: Mut<WrappedMint<'b, { AccountState::Initialized }>>,
+    pub wrapped_meta: WrappedTokenMeta<'b, { AccountState::Initialized }>,
+
+    pub mint_authority: MintSigner<'b>,
+}
+*/
+
 #[derive(FromAccounts)]
 pub struct CompleteTransfer<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
@@ -76,15 +101,16 @@ pub struct CompleteTransfer<'b> {
     // Above includes claim account
 
     pub chain_registration: Endpoint<'b, { AccountState::Initialized }>,
-
+    // custody == Native Swap ATA
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,
+    // custody signer == PDA of Native Swap Program ID
     pub custody_signer: CustodySigner<'b>,
     pub to_fees: Mut<Data<'b, SplAccount, { AccountState::MaybeInitialized }>>,
     pub mint: Mut<WrappedMint<'b, { AccountState::Initialized }>>,
     pub wrapped_meta: WrappedTokenMeta<'b, { AccountState::Initialized }>,
 
     pub mint_authority: TokenBridgeMintSigner<'b>,
-    pub token_bridge: Info<'b>,
+    pub token_bridge: Info<'b>, //<-- added for derived config, endpoint, & wrapped metadata
 }
 
 impl<'a> From<&CompleteTransfer<'a>> for EndpointDerivationData {
@@ -104,6 +130,8 @@ impl<'a> From<&CompleteTransfer<'a>> for WrappedDerivationData {
         }
     }
 }
+
+// have to define implementations for the derived data similar to CompleteWrappedWithPayload
 
 impl<'a> From<&CompleteTransfer<'a>> for CustodyAccountDerivationData {
     fn from(accs: &CompleteTransfer<'a>) -> Self {
@@ -125,15 +153,19 @@ pub fn complete_transfer(
     _data: CompleteTransferData,
 ) -> Result<()> {
 
+    msg!("program id: {:?}", ctx.program_id);
+    msg!("accounts: {:?}", ctx.accounts);
+    // core bridge
     let bridge_id = ctx.accounts[14].info().key;
+    //where the payload/postedVaa is being stored
     let message_key = ctx.accounts[2].info().key;
-    msg!("bridge_id: {:?}", bridge_id);
-    msg!("message_key: {:?}", message_key);
-    // Verify that the custody account is derived correctly
+
+    // Verify that the custody account is a ATA of custody owner aka native swap
     let derivation_data: CustodyAccountDerivationData = (&*accs).into();
     accs.custody
         .verify_derivation(ctx.program_id, &derivation_data)?;
     
+    // if the ATA of the wrapped token belonging to NativeSwap is not created, create it 
     if !accs.custody.is_initialized() {
         accs.custody
             .create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
@@ -149,7 +181,8 @@ pub fn complete_transfer(
 
     // see https://github.com/certusone/wormhole/blob/2e24f11fa045ac8460347d9796a4ecdb7931a154/solana/modules/token_bridge/program/src/instructions.rs#L312-L338
     // TODO: maybe there's a better way to rebuild this off our list of accounts which should be nearly compatible
-
+    
+    // transfer the wrapped token from the token bridge ATA to the NativeSwap ATA
     let transfer_ix = Instruction {
         program_id: *accs.token_bridge.info().key,
         accounts: vec![
