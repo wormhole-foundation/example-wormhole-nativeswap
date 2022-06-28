@@ -1,0 +1,31 @@
+[package]
+name = "xc_swap"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "xc_swap"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[profile.release]
+overflow-checks = true
+
+[dependencies]
+anchor-lang = "0.24.2"
+anchor-spl = "0.24.2"
+spl-token = "3.3.0"
+num-traits = "0.2"
+num-derive = "0.3"
+borsh = "0.9.3"
+hex = "0.4.3"
+num = "0.4"
+itertools = "0.8"
+const-decoder = "0.2.0"
