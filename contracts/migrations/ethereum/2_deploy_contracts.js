@@ -7,19 +7,13 @@ const scriptsAddressPath = "../react/src/addresses";
 
 module.exports = async function (deployer, network) {
   const routerAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
-  const feeTokenAddress = "0x36Ed51Afc79619b299b238898E72ce482600568a"; // wUST
+  const feeTokenAddress = "0x6336c2dA64408Fcc277e0E1104aC6c34c431464c"; // wormUSD
   const tokenBridgeAddress = "0xF890982f9310df57d00f659cf4fd87e65adEd8d7";
   const wrappedEthAddress = "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6";
 
   await deployer.deploy(SwapHelper);
   await deployer.link(SwapHelper, CrossChainSwapV3);
-  await deployer.deploy(
-    CrossChainSwapV3,
-    routerAddress,
-    feeTokenAddress,
-    tokenBridgeAddress,
-    wrappedEthAddress
-  );
+  await deployer.deploy(CrossChainSwapV3, routerAddress, feeTokenAddress, tokenBridgeAddress, wrappedEthAddress);
 
   // save the contract address somewhere
   await fsp.mkdir(scriptsAddressPath, { recursive: true });
