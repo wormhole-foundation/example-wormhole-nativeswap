@@ -46,7 +46,6 @@ library SwapHelper {
         uint256 deadline;
         uint24 poolFee;
         uint8 swapFunctionType;
-        uint8 swapCurrencyType;
         uint256 relayerFee;
     }
 
@@ -96,9 +95,6 @@ library SwapHelper {
         index += 2;
 
         decoded.swapFunctionType = vmPayload.toUint8(index);
-        index += 1;
-
-        decoded.swapCurrencyType = vmPayload.toUint8(index);
         index += 1;
 
         decoded.relayerFee = vmPayload.toUint256(index);
