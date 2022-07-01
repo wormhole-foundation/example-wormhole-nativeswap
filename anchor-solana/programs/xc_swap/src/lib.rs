@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 mod errors;
 mod context;
 mod env;
+mod wormhole;
 mod contract_state;
 
 use context::*;
@@ -20,7 +21,7 @@ pub mod xc_swap {
         ctx.accounts.contract_state.token_bridge_pubkey = ctx.accounts.token_bridge.key();
 
         // Create fixed accounts PDAs so we can simply check addresses in subsequent calls.
-        ctx.accounts.contract_state.setWormholeAccounts(&ctx.accounts.wormhole.key(), &ctx.accounts.token_bridge.key());
+        ctx.accounts.contract_state.set_wormhole_accounts(&ctx.accounts.wormhole.key(), &ctx.accounts.token_bridge.key());
 
         Ok(())
     }

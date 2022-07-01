@@ -20,7 +20,7 @@ pub struct ContractState {
 impl ContractState {
     pub const MAXIMUM_SIZE: usize = 32 + 32 + 32*8;
 
-    pub fn setWormholeAccounts(& mut self, wormhole_pkey: &Pubkey, token_bridge_pkey: &Pubkey) {
+    pub fn set_wormhole_accounts(& mut self, wormhole_pkey: &Pubkey, token_bridge_pkey: &Pubkey) {
         (self.custody_signer_key, _) = Pubkey::find_program_address(&[b"custody_signer"], token_bridge_pkey);
         (self.mint_signer_key, _) = Pubkey::find_program_address(&[b"mint_signer"], token_bridge_pkey);
         (self.authority_signer_key, _) = Pubkey::find_program_address(&[b"authority_signer"], token_bridge_pkey);
