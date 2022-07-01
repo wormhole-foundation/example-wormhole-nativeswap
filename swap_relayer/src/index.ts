@@ -12,33 +12,11 @@ import {
   getEmitterAddressTerra,
 } from "@certusone/wormhole-sdk";
 
-import {
-  importCoreWasm,
-  setDefaultWasm,
-} from "@certusone/wormhole-sdk/lib/cjs/solana/wasm";
-
-import {
-  createSpyRPCServiceClient,
-  subscribeSignedVAA,
-} from "@certusone/wormhole-spydk";
-
+import { importCoreWasm, setDefaultWasm } from "@certusone/wormhole-sdk/lib/cjs/solana/wasm";
+import { createSpyRPCServiceClient, subscribeSignedVAA } from "@certusone/wormhole-spydk";
 import { ethers } from "ethers";
-
-import {
-  EvmEnvironment,
-  isEvmContract,
-  loadEvmConfig,
-  makeEvmContractData,
-  relayVaaToEvm,
-} from "./evm";
-
-import {
-  isTerraContract,
-  loadTerraConfig,
-  makeTerraContractData,
-  relayVaaToTerra,
-  TerraEnvironment,
-} from "./terra";
+import { EvmEnvironment, isEvmContract, loadEvmConfig, makeEvmContractData, relayVaaToEvm } from "./evm";
+import { isTerraContract, loadTerraConfig, makeTerraContractData, relayVaaToTerra, TerraEnvironment } from "./terra";
 
 export let logger: any;
 
@@ -66,7 +44,6 @@ export type Type3Payload = {
   contractAddress: string;
   relayerFee: ethers.BigNumber;
   swapFunctionType: number;
-  swapCurrencyType: number;
 };
 
 type PendingEvent = {
@@ -88,11 +65,7 @@ let condition = new CondVar();
 let pendingQueue = new Array<PendingEvent>();
 
 if (success) {
-  logger.info(
-    "swap_relayer starting up, will listen for signed VAAs from [" +
-      env.spy_host +
-      "]"
-  );
+  logger.info("swap_relayer starting up, will listen for signed VAAs from [" + env.spy_host + "]");
 
   try {
     makeEvmContractData(env.evm_configs);
@@ -143,10 +116,7 @@ async function spy_listen() {
       var myFilters = [];
       for (var i = 0; i < parsedJsonFilters.length; i++) {
         var myChainId = parseInt(parsedJsonFilters[i].chain_id) as ChainId;
-        var myEmitterAddress = await encodeEmitterAddress(
-          myChainId,
-          parsedJsonFilters[i].emitter_address
-        );
+        var myEmitterAddress = await encodeEmitterAddress(myChainId, parsedJsonFilters[i].emitter_address);
         var myEmitterFilter = {
           emitterFilter: {
             chainId: myChainId,
@@ -182,10 +152,7 @@ async function spy_listen() {
   })();
 }
 
-async function encodeEmitterAddress(
-  myChainId,
-  emitterAddressStr
-): Promise<string> {
+async function encodeEmitterAddress(myChainId, emitterAddressStr): Promise<string> {
   if (myChainId === CHAIN_ID_SOLANA) {
     return await getEmitterAddressSolana(emitterAddressStr);
   }
@@ -206,17 +173,11 @@ async function processVaa(vaaBytes: string) {
 
   let emitter_address: string = uint8ArrayToHex(parsedVAA.emitter_address);
 
-  let seqNumKey: string =
-    parsedVAA.emitter_chain.toString() + ":" + emitter_address;
+  let seqNumKey: string = parsedVAA.emitter_chain.toString() + ":" + emitter_address;
   let lastSeqNum = seqMap.get(seqNumKey);
   if (lastSeqNum) {
     if (lastSeqNum >= parsedVAA.sequence) {
-      logger.debug(
-        "ignoring duplicate: emitter: [" +
-          seqNumKey +
-          "], seqNum: " +
-          parsedVAA.sequence
-      );
+      logger.debug("ignoring duplicate: emitter: [" + seqNumKey + "], seqNum: " + parsedVAA.sequence);
       return;
     }
   }
@@ -248,8 +209,6 @@ async function processVaa(vaaBytes: string) {
           t3Payload.relayerFee +
           "],  swapFunctionType: [" +
           t3Payload.swapFunctionType +
-          "], swapCurrencyType: [" +
-          t3Payload.swapCurrencyType +
           "]"
       );
 
@@ -270,8 +229,6 @@ async function processVaa(vaaBytes: string) {
           t3Payload.relayerFee +
           "],  swapFunctionType: [" +
           t3Payload.swapFunctionType +
-          "], swapCurrencyType: [" +
-          t3Payload.swapCurrencyType +
           "]"
       );
     }
@@ -289,10 +246,7 @@ async function processVaa(vaaBytes: string) {
   }
 }
 
-function decodeSignedVAAPayloadType3(
-  parsedVAA: any,
-  sourceChainId: number
-): Type3Payload {
+function decodeSignedVAAPayloadType3(parsedVAA: any, sourceChainId: number): Type3Payload {
   const payload = Buffer.from(new Uint8Array(parsedVAA.payload));
   if (payload[0] !== 3) return undefined;
 
@@ -310,18 +264,13 @@ function decodeSignedVAAPayloadType3(
 
   let contractAddress: string = "";
   let swapFunctionType: number = 0;
-  let swapCurrencyType: number = 0;
 
   if (targetChainId === 3) {
-    logger.info(
-      "decodeSignedVAAPayloadType3: terraContractAddr: [" +
-        payload.slice(67, 67 + 32).toString("hex") +
-        "]"
-    );
+    logger.info("decodeSignedVAAPayloadType3: terraContractAddr: [" + payload.slice(67, 67 + 32).toString("hex") + "]");
 
     contractAddress = payload.slice(67, 67 + 32).toString("hex");
   } else {
-    if (payload.length < 262) {
+    if (payload.length < 272) {
       logger.error(
         "decodeSignedVAAPayloadType3: dropping type 3 vaa because the payload is too short to extract the contract fields, length: " +
           payload.length +
@@ -330,34 +279,24 @@ function decodeSignedVAAPayloadType3(
       );
       return undefined;
     }
-
     contractAddress = payload.slice(79, 79 + 20).toString("hex");
     swapFunctionType = payload.readUInt8(272);
-    swapCurrencyType = payload.readUInt8(273);
   }
 
   return {
     sourceChainId: sourceChainId,
     targetChainId: targetChainId,
     contractAddress: contractAddress,
-    relayerFee: ethers.BigNumber.from(payload.slice(101, 101 + 32)),
+    relayerFee: ethers.BigNumber.from(payload.slice(273, 273 + 32)),
     swapFunctionType: swapFunctionType,
-    swapCurrencyType: swapCurrencyType,
   };
 }
 
 function isOurContract(contractAddress: string, chainId: number): boolean {
-  return (
-    isEvmContract(contractAddress, chainId) ||
-    isTerraContract(contractAddress, chainId)
-  );
+  return isEvmContract(contractAddress, chainId) || isTerraContract(contractAddress, chainId);
 }
 
-async function postVaa(
-  vaaBytes: any,
-  t3Payload: Type3Payload,
-  receiveTime: Date
-) {
+async function postVaa(vaaBytes: any, t3Payload: Type3Payload, receiveTime: Date) {
   let event: PendingEvent = {
     vaaBytes: vaaBytes,
     t3Payload: t3Payload,
@@ -366,9 +305,7 @@ async function postVaa(
 
   await mutex.runExclusive(() => {
     pendingQueue.push(event);
-    logger.debug(
-      "posting event, there are now " + pendingQueue.length + " enqueued events"
-    );
+    logger.debug("posting event, there are now " + pendingQueue.length + " enqueued events");
     if (condition) {
       logger.debug("hitting condition variable.");
       condition.complete(true);
@@ -419,16 +356,12 @@ async function callBack(err: any, result: any) {
 
       await mutex.runExclusive(async () => {
         if (pendingQueue.length === 0) {
-          logger.debug(
-            "in callback, no more pending events, rearming the condition."
-          );
+          logger.debug("in callback, no more pending events, rearming the condition.");
           done = true;
           condition = new CondVar();
           await condition.wait(COND_VAR_TIMEOUT, callBack);
         } else {
-          logger.debug(
-            "in callback, there are " + pendingQueue.length + " pending events."
-          );
+          logger.debug("in callback, there are " + pendingQueue.length + " pending events.");
         }
       });
     }
@@ -455,8 +388,7 @@ function initLogger() {
   let logFileName: string = "";
   if (process.env.LOG_DIR) {
     useConsole = false;
-    logFileName =
-      process.env.LOG_DIR + "/swap_relay." + new Date().toISOString() + ".log";
+    logFileName = process.env.LOG_DIR + "/swap_relay." + new Date().toISOString() + ".log";
   }
 
   let logLevel = "info";
@@ -472,11 +404,7 @@ function initLogger() {
       level: logLevel,
     });
   } else {
-    console.log(
-      "swap_relay is logging to [%s] at level [%s]",
-      logFileName,
-      logLevel
-    );
+    console.log("swap_relay is logging to [%s] at level [%s]", logFileName, logLevel);
 
     transport = new winston.transports.File({
       filename: logFileName,
@@ -492,9 +420,7 @@ function initLogger() {
       winston.format.timestamp({
         format: "YYYY-MM-DD HH:mm:ss.SSS",
       }),
-      winston.format.printf(
-        (info: any) => `${[info.timestamp]}|${info.level}|${info.message}`
-      )
+      winston.format.printf((info: any) => `${[info.timestamp]}|${info.level}|${info.message}`)
     ),
   };
 
