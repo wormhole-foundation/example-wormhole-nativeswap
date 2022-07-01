@@ -96,30 +96,31 @@ contract CrossChainSwapV2 {
             "tokenOut must be wrapped native asset"
         );
 
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
-        IERC20 feeToken = IERC20(FEE_TOKEN_ADDRESS);
-        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
-        uint256 swapAmountLessFees = payload.swapAmount - payload.relayerFee;
-
         // approve the router to spend tokens
         TransferHelper.safeApprove(
             uniPath[0], 
             address(SWAP_ROUTER), 
-            swapAmountLessFees
+            payload.swapAmount
         );
 
         // try to execute the swap
         try SWAP_ROUTER.swapExactTokensForTokens(
-            swapAmountLessFees,
+            payload.swapAmount,
             payload.estimatedAmount,
             uniPath,
             address(this), 
             payload.deadline
         ) returns (uint256[] memory amounts) {
+            // calculate how much to pay the relayer in the native token
+            uint256 nativeRelayerFee = amounts[1] * payload.relayerFee / payload.swapAmount;
+            uint256 nativeAmountOut = amounts[1] - nativeRelayerFee;
+
             // unwrap native and send to recipient
             IWETH(WRAPPED_NATIVE).withdraw(amounts[1]);
-            payable(payload.recipientAddress).transfer(amounts[1]);
+            payable(payload.recipientAddress).transfer(nativeAmountOut);
+
+            /// pay the relayer in the native token
+            payable(msg.sender).transfer(nativeRelayerFee);
 
             // used in UI to tell user they're getting
             // their desired token
@@ -127,15 +128,19 @@ contract CrossChainSwapV2 {
                 payload.recipientAddress, 
                 uniPath[1], 
                 msg.sender, 
-                amounts[1],
+                nativeAmountOut,
                 1
             );
             return amounts;
         } catch {
+            // pay relayer in the feeToken since the swap failed 
+            IERC20 feeToken = IERC20(FEE_TOKEN_ADDRESS); 
+            feeToken.safeTransfer(msg.sender, payload.relayerFee);
+
             // swap failed - return feeToken to recipient
-            IERC20(FEE_TOKEN_ADDRESS).safeTransfer(
+            feeToken.safeTransfer(
                 payload.recipientAddress, 
-                swapAmountLessFees
+                payload.swapAmount - payload.relayerFee
             );
 
             // used in UI to tell user they're getting
@@ -144,7 +149,7 @@ contract CrossChainSwapV2 {
                 payload.recipientAddress, 
                 uniPath[0], 
                 msg.sender, 
-                swapAmountLessFees,
+                payload.swapAmount - payload.relayerFee,
                 0
             );
         }
@@ -176,8 +181,7 @@ contract CrossChainSwapV2 {
             "tokenOut must be wrapped native asset"
         );
 
-        // pay relayer before attempting to do the swap
-        // reflect payment in second swap amount
+        // pay the relayer in feeToken so that user gets desired exact amount out
         IERC20 feeToken = IERC20(FEE_TOKEN_ADDRESS);
         feeToken.safeTransfer(msg.sender, payload.relayerFee);  
         uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
