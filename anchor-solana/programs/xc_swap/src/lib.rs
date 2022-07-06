@@ -5,6 +5,7 @@ mod context;
 mod env;
 mod wormhole;
 mod contract_state;
+mod swap_helper;
 
 use context::*;
 //use state::*;

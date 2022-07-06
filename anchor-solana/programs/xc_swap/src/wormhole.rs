@@ -58,37 +58,19 @@ pub struct BridgeConfig {
 #[repr(transparent)]
 pub struct PostedMessageData(pub MessageData);
 
+/// All VAAs messages posted on solana have this header.
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct MessageData {
-    /// Header of the posted VAA
-    pub vaa_version: u8,
-
-    /// Level of consistency requested by the emitter
-    pub consistency_level: u8,
-
-    /// Time the vaa was submitted
-    pub vaa_time: u32,
-
-    /// Account where signatures are stored
-    pub vaa_signature_account: Pubkey,
-
-    /// Time the posted message was created
-    pub submission_time: u32,
-
-    /// Unique nonce for this message
-    pub nonce: u32,
-
-    /// Sequence number of this message
-    pub sequence: u64,
-
-    /// Emitter of the message
-    pub emitter_chain: u16,
-
-    /// Emitter of the message
-    pub emitter_address: [u8; 32],
-
-    /// Message payload
-    pub payload: Vec<u8>,
+    pub vaa_version: u8,                 // Header of the posted VAA
+    pub consistency_level: u8,           // Level of consistency requested by the emitter
+    pub vaa_time: u32,                   // Time the vaa was submitted
+    pub vaa_signature_account: Pubkey,   // Account where signatures are stored
+    pub submission_time: u32,            // Time the posted message was created
+    pub nonce: u32,                      // Unique nonce for this message
+    pub sequence: u64,                   // Sequence number of this message
+    pub emitter_chain: u16,              // Emitter of the message
+    pub emitter_address: [u8; 32],       // Emitter of the message
+    pub payload: Vec<u8>,                // Message payload
 }
 
 impl AnchorDeserialize for PostedMessageData {

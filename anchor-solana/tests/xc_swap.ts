@@ -54,7 +54,9 @@ describe("xc_swap", () => {
         payer: payer.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .rpc();
+      .rpc({ commitment: "finalized" }); //  .rpc();
     console.log("Your transaction signature", tx);
+    //    await connection.confirmTransaction(tx, "finalized");   // No neeed if rpc() has commitment as arg.
+    //    console.log("Your transaction was confirmed");
   });
 });
