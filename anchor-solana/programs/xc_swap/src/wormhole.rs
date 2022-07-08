@@ -19,8 +19,9 @@ pub enum ConsistencyLevel {
     Finalized,
 }
 
+// Wormhole core bridge commands.
 #[derive(AnchorDeserialize, AnchorSerialize)]
-pub enum Instruction {
+pub enum CoreBridgeInstruction {
     Initialize,
     PostMessage,
     PostVAA,
@@ -29,6 +30,24 @@ pub enum Instruction {
     UpgradeContract,
     UpgradeGuardianSet,
     VerifySignatures,
+}
+
+// Wormhole token bridge commands.
+#[derive(AnchorDeserialize, AnchorSerialize)]
+enum TokenBridgeInstruction {
+    Initialize,
+    AttestToken,
+    CompleteNative,
+    CompleteWrapped,
+    TransferWrapped,
+    TransferNative,
+    RegisterChain,
+    CreateWrapped,
+    UpgradeContract,
+    CompleteNativeWithPayload,
+    CompleteWrappedWithPayload,
+    TransferWrappedWithPayload,
+    TransferNativeWithPayload,
 }
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone)]
