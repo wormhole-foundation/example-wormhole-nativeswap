@@ -7,7 +7,7 @@ pub type ForeignAddr = [u8; 32];        // Can be expanded to struct with Format
 
 pub type Unum256 = (u128, u64, u64);
 pub type Unum24 = (u8, u16);
-
+/*
 // Parameters needed for exactIn swap type
 // These are cross-platform BigEndian values.
 #[derive(BorshDeserialize, BorshSerialize, Default)]
@@ -31,7 +31,7 @@ pub struct ExactOutParameters {
     pub deadline: Unum256,
     pub pool_fee: Unum24,
 }
-
+*/
 // Parameters parsed from a VAA for executing swaps on the destination chain.
 // This is payload in PayloadTransferWithPayload struct, which is payload (3) header.
 // Is this DEX-specific?

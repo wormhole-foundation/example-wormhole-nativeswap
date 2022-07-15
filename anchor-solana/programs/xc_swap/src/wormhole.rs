@@ -1,5 +1,15 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
+use anchor_lang::solana_program::{
+    system_program,
+    sysvar,
+    //    borsh::try_from_slice_unchecked,
+    instruction::Instruction,
+};
+    
+use crate:: {
+    swap_helper::ForeignAddr,
+};
 
 #[derive(AnchorDeserialize, AnchorSerialize)]
 pub struct PostMessageData {
@@ -88,7 +98,7 @@ pub struct MessageData {
     pub nonce: u32,                      // Unique nonce for this message
     pub sequence: u64,                   // Sequence number of this message
     pub emitter_chain: u16,              // Emitter of the message
-    pub emitter_address: [u8; 32],       // Emitter of the message
+    pub emitter_address: ForeignAddr,       // Emitter of the message
     pub payload: Vec<u8>,                // Message payload
 }
 
@@ -103,4 +113,64 @@ impl AnchorDeserialize for PostedMessageData {
 
 pub fn get_message_data<'info>(vaa_account: &AccountInfo<'info>) -> Result<MessageData> {
     Ok(PostedMessageData::try_from_slice(&vaa_account.data.borrow())?.0)
+}
+
+
+#[derive(AnchorDeserialize, AnchorSerialize, Default)]
+pub struct TransferNativeWithPayloadData {
+    pub nonce: u32,
+    pub amount: u64,
+    pub target_address: ForeignAddr,
+    pub target_chain: u16,
+    pub payload: Vec<u8>,
+    pub cpi_program_id: Option<Pubkey>,
+}
+
+#[inline(never)]
+pub fn transfer_native_with_payload_ix(
+    payer: &dyn Key,
+    token_bridge_config: &dyn Key,
+    from: &dyn Key,
+    mint: &dyn Key,
+    wh_custody: &dyn Key,
+    authority_signer: &dyn Key,
+    wh_custody_signer: &dyn Key,
+    core_bridge_config: &dyn Key,
+    core_bridge: &dyn Key,
+    message: &dyn Key,
+    token_bridge: &dyn Key,
+    emitter: &dyn Key,
+    sequence: &dyn Key,
+    fee_collector: &dyn Key,
+    sender_account: &dyn Key, // PDA(["sender"], crate::ID)
+    args: TransferNativeWithPayloadData,
+) -> Result<Box<Instruction>> {
+    msg!("transfer_native_with_payload_ix");
+    let mut data = vec![TokenBridgeInstruction::TransferNativeWithPayload as u8];
+    args.serialize(&mut &mut data)?;
+    Ok(Box::new(Instruction {
+        program_id: token_bridge.key(),
+        accounts: vec![
+            AccountMeta::new(payer.key(), true),
+            AccountMeta::new_readonly(token_bridge_config.key(), false),
+            AccountMeta::new(from.key(), false),
+            AccountMeta::new(mint.key(), false),
+            AccountMeta::new(wh_custody.key(), false),
+            AccountMeta::new_readonly(authority_signer.key(), false),
+            AccountMeta::new_readonly(wh_custody_signer.key(), false),
+            AccountMeta::new(core_bridge_config.key(), false),
+            AccountMeta::new(message.key(), true),
+            AccountMeta::new_readonly(emitter.key(), false),
+            AccountMeta::new(sequence.key(), false),
+            AccountMeta::new(fee_collector.key(), false),
+            // Dependencies
+            AccountMeta::new_readonly(sysvar::clock::id(),false),
+            AccountMeta::new_readonly(sender_account.key(), true),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+            AccountMeta::new_readonly(system_program::id(),false),
+            AccountMeta::new_readonly(core_bridge.key(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data,
+    }))
 }
