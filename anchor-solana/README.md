@@ -12,7 +12,7 @@ or
 make NETWORK=testnet artifacts
 ```
 
-Tha t will create `wormhole/solana/artifacts-devnet/` or `*-testnet` dir with \*.so cntracts.
+That will create `wormhole/solana/artifacts-devnet/` or `*-testnet` dir with \*.so cntracts.
 
 Copy needed .so files to `wormhole-nativeswap-example/anchor-solana/tests`
 

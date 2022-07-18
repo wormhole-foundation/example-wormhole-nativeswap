@@ -85,7 +85,7 @@ pub struct InitTransferOutNative<'info> {
     )]
     /// CHECK: 
     pub token_bridge_custody: AccountInfo<'info>,
-    // TokenAccount in Anchor needs an initialized assount.
+    // TokenAccount in Anchor needs an initialized account.
     // We are not required to have that.
     // Token bridge will create it as needed. So we only check PDA derivation
     //  pub token_bridge_custody: Account<'info, TokenAccount>,

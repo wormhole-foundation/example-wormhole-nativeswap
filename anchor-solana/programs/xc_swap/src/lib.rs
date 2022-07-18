@@ -78,7 +78,7 @@ pub mod xc_swap {
             &accts.token_bridge_config,
             &accts.from_token_account,
             &accts.mint,
-            &accts.token_bridge_custody,  // to?
+            &accts.token_bridge_custody,
             &accts.token_bridge_authority_signer,
             &accts.token_bridge_custody_signer,
             &accts.core_bridge_config,

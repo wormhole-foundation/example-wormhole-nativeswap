@@ -164,35 +164,7 @@ describe("xc_swap", () => {
     const wormholeFeeCollector = deriveAddress([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS);
 
     const senderPda = deriveAddress([Buffer.from("sender")], program.programId);
-    /*
-    const ix = await program.methods
-      .initTransferOutNative(new BN(55), 2, ta)
-      .accounts({
-        payer: payer.publicKey,
-        contractState: contractStateAddr,
-        tokenBridgeConfig: tokenBridgeConfig,
-        fromTokenAccount: mintATA.address,
-        mint: mint,
-        tokenBridgeCustody: tokenBridgeCustody,
-        tokenBridgeAuthoritySigner: tokenBridgeAuthoritySigner,
-        tokenBridgeCustodySigner: tokenBridgeCustodySigner,
-        coreBridgeConfig: coreBridgeConfig,
-        coreBridge: CORE_BRIDGE_ADDRESS,
-        tokenBridge: TOKEN_BRIDGE_ADDRESS,
-        wormholeMessage: vaa_kp.publicKey,
-        wormholeEmitter: wormholeEmitter,
-        wormholeSequence: wormholeSequence,
-        wormholeFeeCollector: wormholeFeeCollector,
-        clock: web3.SYSVAR_CLOCK_PUBKEY,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        rent: web3.SYSVAR_RENT_PUBKEY,
-        sender: senderPda,
-      })
-      .signers([payer, vaa_kp])
-      .instruction();
-    console.log("instruction: ", ix);
-*/
+
     const tx = await program.methods
       .initTransferOutNative(new BN(55), 2, ta)
       .accounts({
@@ -220,5 +192,6 @@ describe("xc_swap", () => {
       .signers([payer, vaa_kp])
       //  .rpc({ commitment: "finalized" });    // In case we do need to use this account right away.
       .rpc();
+    // use .instruction() instead of .rpc() to print instruction to console.
   });
 });

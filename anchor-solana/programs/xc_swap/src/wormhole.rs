@@ -163,9 +163,9 @@ pub fn transfer_native_with_payload_ix(
             AccountMeta::new_readonly(emitter.key(), false),
             AccountMeta::new(sequence.key(), false),
             AccountMeta::new(fee_collector.key(), false),
-            // Dependencies
             AccountMeta::new_readonly(sysvar::clock::id(),false),
             AccountMeta::new_readonly(sender_account.key(), true),
+            // Not in tokenBridge TransferNativeWithPayload:
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(system_program::id(),false),
             AccountMeta::new_readonly(core_bridge.key(), false),
