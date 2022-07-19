@@ -190,7 +190,8 @@ describe("xc_swap", () => {
         sender: senderPda,
       })
       .signers([payer, vaa_kp])
-      //  .rpc({ commitment: "finalized" });    // In case we do need to use this account right away.
+      // Skip preflight if there are errors and I want to see them in program logs.
+      //  .rpc({ skipPreflight: true }); // In case we do need to use this account right away.
       .rpc();
     // use .instruction() instead of .rpc() to print instruction to console.
   });

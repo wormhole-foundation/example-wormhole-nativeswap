@@ -21,6 +21,8 @@ use anchor_lang::solana_program::{
 //    sysvar::*,
 };
 
+use anchor_spl::*;
+
 use crate:: {
     wormhole:: {
         TransferNativeWithPayloadData,
@@ -54,9 +56,26 @@ pub mod xc_swap {
        , tgt_address: [u8; 32]
     ) -> Result<()> {
         let accts = ctx.accounts;
-        //msg!("init_transfer_out_native amt: {} tgtc: {}, addr: {:?}", amount, tgt_chain, tgt_address);
-        msg!("native token mint: {}", accts.mint.key());
-        msg!("snder bumps: {}",  ctx.bumps["sender"]);
+        // msg!("init_transfer_out_native amt: {} tgtc: {}, addr: {:?}", amount, tgt_chain, tgt_address);
+//        msg!("native token mint: {}", accts.mint.key());
+//        msg!("sender bumps: {}",  ctx.bumps["sender"]);
+
+
+        // We need to delegate authority to the token bridge program's
+        // authority signer to spend the custodian's token
+        let authority_signer = &accts.token_bridge_authority_signer;
+        token::approve(
+            CpiContext::new_with_signer(
+                accts.token_program.to_account_info(),
+                token::Approve {
+                    to: accts.from_token_account.to_account_info(),
+                    delegate: authority_signer.to_account_info(),
+                    authority: accts.payer.to_account_info(),
+                },
+                &[&[]],
+            ),
+            amount,
+        )?;
 
         // DBD: Instructions for the receiving end. Put actual data.
         let vaa_params = DecodedVaaParameters { 
@@ -98,7 +117,6 @@ pub mod xc_swap {
                 cpi_program_id: Some(crate::ID),
             },
         )?;
-        msg!("transfer_native_with_payload_ix ---"); 
 
         invoke_signed(
             &ix,
