@@ -30,7 +30,7 @@ require("dotenv").config({ path: ".env" });
 module.exports = {
   contracts_directory: "./contracts",
   contracts_build_directory: "./build/contracts",
-  migrations_directory: "./migrations/polygon",
+  migrations_directory: "./migrations/tokens",
   /**
    * Networks define how you connect to your ethereum client and let you set the
    * defaults web3 uses to send transactions. If you don't specify one truffle
@@ -64,14 +64,13 @@ module.exports = {
     // },
     // Useful for deploying to a public network.
     // NB: It's important to wrap the provider as a function.
-    mumbai: {
-      provider: () => new HDWalletProvider(process.env.ETH_PRIVATE_KEY, process.env.MUMBAI_PROVIDER),
-      network_id: 80001,
-      gasPrice: 80000000000,
-      gas: 7000000,
+    goerli: {
+      provider: () => new HDWalletProvider(process.env.ETH_PRIVATE_KEY, process.env.GOERLI_PROVIDER),
+      network_id: 5,
+      //gas: 4465030,
       //confirmations: 2,    // # of confs to wait between deployments. (default: 0)
-      timeoutBlocks: 50, // # of blocks before a deployment times out  (minimum/default: 50)
-      skipDryRun: true, // Skip dry run before migrations? (default: false for public nets )
+      //timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
+      //skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
     },
     // Useful for private networks
     // private: {

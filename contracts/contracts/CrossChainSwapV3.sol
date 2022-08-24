@@ -3,35 +3,15 @@
 pragma solidity ^0.7.6;
 pragma abicoder v2;
 
-import './IWormhole.sol';
-import './SwapHelper.sol';
+import './shared/IWormhole.sol';
+import './shared/SwapHelper.sol';
+import './shared/TokenBridge.sol';
+import './shared/WETH.sol';
 import 'solidity-bytes-utils/contracts/BytesLib.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
 import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
-
-
-interface TokenBridge {
-  function transferTokensWithPayload(
-      address token,
-      uint256 amount,
-      uint16 recipientChain,
-      bytes32 recipient,
-      uint256 arbiterFee,
-      uint32 nonce,
-      bytes memory payload
-    ) external payable returns (uint64);
-    function completeTransferWithPayload(
-        bytes memory encodedVm,
-        address feeRecipient
-    ) external returns (bytes memory);
-}
-
-
-interface IWETH is IERC20 {
-    function withdraw(uint amount) external;
-}
 
 
 interface IUniswapRouter is ISwapRouter {
@@ -45,16 +25,12 @@ interface IUniswapRouter is ISwapRouter {
 contract CrossChainSwapV3 {
     using SafeERC20 for IERC20;
     using BytesLib for bytes;
-    uint8 public immutable typeExactIn = 1;
-    uint8 public immutable typeExactOut = 2;
-    uint8 public immutable typeNativeSwap = 1;
-    uint8 public immutable typeTokenSwap = 2;
-    uint16 public immutable expectedVaaLength = 274;
-    uint8 public immutable terraChainId = 3;
-    IUniswapRouter public immutable swapRouter;
-    address public immutable feeTokenAddress;
-    address public immutable tokenBridgeAddress;
-    address public immutable wrappedNative;
+    uint8 public immutable TypeExactIn = 1;
+    uint8 public immutable TypeExactOut = 2;
+    IUniswapRouter public immutable SWAP_ROUTER;
+    address public immutable FEE_TOKEN_ADDRESS;
+    address public immutable TOKEN_BRIDGE_ADDRESS;
+    address public immutable WRAPPED_NATIVE;
 
     constructor(
         address _swapRouterAddress, 
@@ -62,10 +38,10 @@ contract CrossChainSwapV3 {
         address _tokenBridgeAddress,
         address _wrappedNativeAddress
     ) {
-        swapRouter = IUniswapRouter(_swapRouterAddress);
-        feeTokenAddress = _feeTokenAddress;
-        tokenBridgeAddress = _tokenBridgeAddress;
-        wrappedNative = _wrappedNativeAddress;
+        SWAP_ROUTER = IUniswapRouter(_swapRouterAddress);
+        FEE_TOKEN_ADDRESS = _feeTokenAddress;
+        TOKEN_BRIDGE_ADDRESS = _tokenBridgeAddress;
+        WRAPPED_NATIVE = _wrappedNativeAddress;
     }
 
     /// @dev Used to communicate information about executed swaps to UI/user
@@ -78,23 +54,15 @@ contract CrossChainSwapV3 {
     );
 
     /// @dev Returns the parsed TokenBridge payload which contains swap 
-    /// instructions after redeeming from the VAA from the TokenBridge
+    /// instructions after redeeming the VAA from the TokenBridge
     function _getParsedPayload(
         bytes calldata encodedVaa,
-        uint8 swapFunctionType,
-        uint8 swapCurrencyType,
-        address feeRecipient
+        uint8 swapFunctionType
     ) private returns (SwapHelper.DecodedVaaParameters memory payload) {
         // complete the transfer on the token bridge
         bytes memory vmPayload = TokenBridge(
-            tokenBridgeAddress
-        ).completeTransferWithPayload(encodedVaa, feeRecipient);
-
-        // make sure payload is the right size
-        require(
-            vmPayload.length==expectedVaaLength, 
-            "VAA has the wrong number of bytes"
-        );
+            TOKEN_BRIDGE_ADDRESS
+        ).completeTransferWithPayload(encodedVaa);
 
         // parse the payload 
         payload = SwapHelper.decodeVaaPayload(vmPayload);
@@ -104,56 +72,34 @@ contract CrossChainSwapV3 {
             payload.swapFunctionType==swapFunctionType, 
             "incorrect swapFunctionType in payload"
         ); 
-        require(
-            payload.swapCurrencyType==swapCurrencyType, 
-            "incorrect swapCurrencyType in payload"
-        ); 
-    }
+    }     
 
     /// @dev Executes exactIn native asset swap and pays the relayer
     function recvAndSwapExactNativeIn(
         bytes calldata encodedVaa
     ) external returns (uint256 amountOut) {
-        // check token balance before redeeming the payload
-        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector,
-            address(this)
-        ));
-        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
-
+        // redeem and fetch parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
-                typeExactIn,
-                typeNativeSwap,
-                msg.sender // feeRecipient
-            );
-
-        // query token balance after redeeming the payload
-        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, 
-            address(this)
-        ));
-        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
-
-        // the balance change is the swap amount (less relayer fees)
-        uint256 swapAmountLessFees = balanceAfter - balanceBefore;
+                TypeExactIn
+            );  
 
         // sanity check path 
         require(
-            payload.path[0]==feeTokenAddress, 
-            "tokenIn must be UST"
+            payload.path[0]==FEE_TOKEN_ADDRESS, 
+            "tokenIn must be feeToken"
         );
         require(
-            payload.path[1]==wrappedNative, 
+            payload.path[1]==WRAPPED_NATIVE, 
             "tokenOut must be wrapped Native"
-        );
+        ); 
 
         // approve the router to spend tokens 
         TransferHelper.safeApprove(
             payload.path[0], 
-            address(swapRouter), 
-            swapAmountLessFees
+            address(SWAP_ROUTER), 
+            payload.swapAmount
         );
         
         // set swap options with user params
@@ -164,16 +110,23 @@ contract CrossChainSwapV3 {
                 fee: payload.poolFee,
                 recipient: address(this), 
                 deadline: payload.deadline,
-                amountIn: swapAmountLessFees,
+                amountIn: payload.swapAmount,
                 amountOutMinimum: payload.estimatedAmount,
                 sqrtPriceLimitX96: 0
             });
 
         // try to execute the swap 
-        try swapRouter.exactInputSingle(params) returns (uint256 amountOut) {
+        try SWAP_ROUTER.exactInputSingle(params) returns (uint256 amountOut) {
+            // calculate how much to pay the relayer in the native token
+            uint256 nativeRelayerFee = amountOut * payload.relayerFee / payload.swapAmount;
+            uint256 nativeAmountOut = amountOut - nativeRelayerFee;
+
             // unwrap native and send to recipient 
-            IWETH(wrappedNative).withdraw(amountOut);
-            payable(payload.recipientAddress).transfer(amountOut);
+            IWETH(WRAPPED_NATIVE).withdraw(amountOut);
+            payable(payload.recipientAddress).transfer(nativeAmountOut);
+
+            /// pay the relayer in the native token
+            payable(msg.sender).transfer(nativeRelayerFee);
 
             // used in UI to tell user they're getting
             // their desired token
@@ -181,86 +134,103 @@ contract CrossChainSwapV3 {
                 payload.recipientAddress, 
                 payload.path[1], 
                 msg.sender, 
-                amountOut,
+                nativeAmountOut,
                 1
             );
             return amountOut;
         } catch {
-            // swap failed - return UST to recipient
-            IERC20(feeTokenAddress).safeTransfer(
+            // pay relayer in the feeToken since the swap failed
+            IERC20 feeToken = IERC20(FEE_TOKEN_ADDRESS); 
+            feeToken.safeTransfer(msg.sender, payload.relayerFee);  
+
+            // swap failed - return feeToken (less relayer fees) to recipient
+            feeToken.safeTransfer(
                 payload.recipientAddress, 
-                swapAmountLessFees
+                payload.swapAmount - payload.relayerFee
             );
 
             // used in UI to tell user they're getting
-            // UST instead of their desired native asset
+            // feeToken instead of their desired native asset
             emit SwapResult(
                 payload.recipientAddress, 
                 payload.path[0], 
                 msg.sender, 
-                swapAmountLessFees,
+                payload.swapAmount - payload.relayerFee,
                 0
             );
         }
     }
 
-    /// @dev Executes exactIn token swap and pays the relayer
-    function recvAndSwapExactIn(
+    /// @dev Executes exactOut native asset swap and pays the relayer
+    function recvAndSwapExactNativeOut(
         bytes calldata encodedVaa
-    ) external returns (uint256 amountOut) {
-        // check token balance before redeeming the payload
-        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector,
-            address(this)
-        ));
-        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
-
-        // redeem and fetch the parsed payload
+    ) external returns (uint256 amountInUsed) {
+        // redeem and fetch parsed payload
         SwapHelper.DecodedVaaParameters memory payload =
             _getParsedPayload(
                 encodedVaa,
-                typeExactIn,
-                typeTokenSwap,
-                msg.sender // feeRecipient
+                TypeExactOut
             );
 
-        // query token balance after redeeming the payload
-        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, 
-            address(this)
-        ));
-        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+        // sanity check path
+        require(
+            payload.path[0]==FEE_TOKEN_ADDRESS, 
+            "tokenIn must be feeToken"
+        );
+        require(
+            payload.path[1]==WRAPPED_NATIVE, 
+            "tokenOut must be wrapped native asset"
+        );
 
-        // the balance change is the swap amount (less relayer fees)
-        uint256 swapAmountLessFees = balanceAfter - balanceBefore;
+        // pay the relayer in feeToken so that user gets desired exact amount out
+        IERC20 feeToken = IERC20(FEE_TOKEN_ADDRESS);
+        feeToken.safeTransfer(msg.sender, payload.relayerFee);  
+        uint256 maxAmountInLessFees = payload.swapAmount - payload.relayerFee;
 
-        // check path to see if first element is the feeToken
-        require(payload.path[0]==feeTokenAddress, "tokenIn must be UST");
+        // amountOut is the estimated swap amount for exact out methods
+        uint256 amountOut = payload.estimatedAmount;
 
         // approve the router to spend tokens
         TransferHelper.safeApprove(
             payload.path[0], 
-            address(swapRouter), 
-            swapAmountLessFees
-        );
-        
+            address(SWAP_ROUTER), 
+            maxAmountInLessFees
+        ); 
+
         // set swap options with user params
-        ISwapRouter.ExactInputSingleParams memory params =
-            ISwapRouter.ExactInputSingleParams({
+        ISwapRouter.ExactOutputSingleParams memory params =
+            ISwapRouter.ExactOutputSingleParams({
                 tokenIn: payload.path[0],
                 tokenOut: payload.path[1],
                 fee: payload.poolFee,
-                recipient: payload.recipientAddress,
+                recipient: address(this), 
                 deadline: payload.deadline,
-                amountIn: swapAmountLessFees,
-                amountOutMinimum: payload.estimatedAmount,
+                amountOut: amountOut,
+                amountInMaximum: maxAmountInLessFees, 
                 sqrtPriceLimitX96: 0
             });
 
         // try to perform the swap
-        try swapRouter.exactInputSingle(params) returns (uint256 amountOut) {
+        try SWAP_ROUTER.exactOutputSingle(params) returns (uint256 amountInUsed) {
+            // refund recipient with any feeToken not used in the swap
+            if (amountInUsed < maxAmountInLessFees) {
+                TransferHelper.safeApprove(
+                    FEE_TOKEN_ADDRESS, 
+                    address(SWAP_ROUTER), 
+                    0
+                );
+                IERC20(FEE_TOKEN_ADDRESS).safeTransfer(
+                    payload.recipientAddress, 
+                    maxAmountInLessFees - amountInUsed
+                );  
+            }
+
+            // unwrap native and send to recipient 
+            IWETH(WRAPPED_NATIVE).withdraw(amountOut);
+            payable(payload.recipientAddress).transfer(amountOut);
+
             // used in UI to tell user they're getting
-            // their desired token
+            // their desired native asset
             emit SwapResult(
                 payload.recipientAddress, 
                 payload.path[1], 
@@ -268,50 +238,35 @@ contract CrossChainSwapV3 {
                 amountOut,
                 1
             );
-            return amountOut;
+            return amountInUsed;
         } catch {
-            // swap failed - return UST to recipient
-            IERC20(feeTokenAddress).safeTransfer(
+            // swap failed - return feeToken to recipient
+            IERC20(FEE_TOKEN_ADDRESS).safeTransfer(
                 payload.recipientAddress, 
-                swapAmountLessFees
+                maxAmountInLessFees
             );
 
             // used in UI to tell user they're getting
-            // UST instead of their desired token
+            // feeToken instead of their desired native asset
             emit SwapResult(
                 payload.recipientAddress, 
                 payload.path[0], 
                 msg.sender, 
-                swapAmountLessFees,
+                maxAmountInLessFees,
                 0
             );
         }
     }
 
-    /// @dev Executes exactIn native asset and token swaps before
-    /// sending a custom payload to the TokenBridge
+    /// @dev Executes exactIn native asset swap
     function _swapExactInBeforeTransfer(
         uint256 amountIn,
         uint256 amountOutMinimum, 
         address contractCaller,
         address[] calldata path,
         uint256 deadline,
-        uint24 poolFee,
-        uint8 swapType
+        uint24 poolFee
     ) internal returns (uint256 amountOut) {
-        if (swapType == typeTokenSwap) {
-            // transfer the allowed amount of tokens to this contract
-            IERC20 token = IERC20(path[0]);
-            token.safeTransferFrom(contractCaller, address(this), amountIn);
-
-            // approve the router to spend tokens
-            TransferHelper.safeApprove(
-                path[0], 
-                address(swapRouter), 
-                amountIn
-            );
-        }
-
         // set swap options with user params
         ISwapRouter.ExactInputSingleParams memory params =
             ISwapRouter.ExactInputSingleParams({
@@ -326,73 +281,8 @@ contract CrossChainSwapV3 {
             });
 
         // perform the swap
-        if (swapType == typeTokenSwap) {
-            amountOut = swapRouter.exactInputSingle(params);
-        } else { // native swap
-            amountOut = swapRouter.exactInputSingle{value: amountIn}(params);
-        }
+        amountOut = SWAP_ROUTER.exactInputSingle{value: amountIn}(params);
     }
-
-    /// @dev Calls _swapExactInBeforeTransfer and encodes custom payload with 
-    /// instructions for executing token swaps on the destination chain
-    function swapExactInAndTransfer(
-        SwapHelper.ExactInParameters calldata swapParams,
-        address[] calldata path,
-        uint256 relayerFee,
-        uint16 targetChainId,
-        bytes32 targetContractAddress,
-        uint32 nonce
-    ) external {  
-        require(
-            swapParams.amountOutMinimum > relayerFee, 
-            "insufficient amountOutMinimum to pay relayer"
-        );
-        require(
-            path[1]==feeTokenAddress, 
-            "tokenOut must be UST for first swap"
-        );  
-
-        // peform the first swap
-        uint256 amountOut = _swapExactInBeforeTransfer(
-            swapParams.amountIn, 
-            swapParams.amountOutMinimum, 
-            msg.sender,
-            path[0:2], 
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeTokenSwap
-        );
-
-        // encode payload for second swap
-        bytes memory payload = abi.encodePacked(
-            swapParams.targetAmountOutMinimum,
-            swapParams.targetChainRecipient,
-            path[2],
-            path[3],
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeExactIn,
-            typeTokenSwap
-        );
-
-        // approve token bridge to spend feeTokens (UST)
-        TransferHelper.safeApprove(
-            feeTokenAddress, 
-            tokenBridgeAddress, 
-            amountOut
-        );
-
-        // send transfer with payload to the TokenBridge
-        TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, 
-            amountOut, 
-            targetChainId, 
-            targetContractAddress, 
-            relayerFee, 
-            nonce, 
-            payload
-        );
-    }  
 
     /// @dev Calls _swapExactInBeforeTransfer and encodes custom payload with 
     /// instructions for executing native asset swaps on the destination chain
@@ -409,12 +299,12 @@ contract CrossChainSwapV3 {
             "insufficient amountOutMinimum to pay relayer"
         );
         require(
-            path[0]==wrappedNative, 
+            path[0]==WRAPPED_NATIVE, 
             "tokenIn must be wrapped native asset for first swap"
         );
         require(
-            path[1]==feeTokenAddress, 
-            "tokenOut must be UST for first swap"
+            path[1]==FEE_TOKEN_ADDRESS, 
+            "tokenOut must be feeToken for first swap"
         ); 
         require(msg.value > 0, "must pass non 0 native asset amount");
 
@@ -425,291 +315,48 @@ contract CrossChainSwapV3 {
             msg.sender,
             path[0:2], 
             swapParams.deadline,
-            swapParams.poolFee,
-            typeNativeSwap
+            swapParams.poolFee
         );
 
-        // create payload variable
-        bytes memory payload;
+        // create payload with target swap instructions
+        bytes memory payload = abi.encodePacked(
+            swapParams.targetAmountOutMinimum,
+            swapParams.targetChainRecipient,
+            path[2],
+            path[3],
+            swapParams.deadline,
+            swapParams.poolFee,
+            TypeExactIn,
+            relayerFee
+        );  
 
-        // UST is native to Terra - no need for swap instructions
-        if (targetChainId == terraChainId) { 
-            payload = abi.encodePacked(
-                swapParams.targetChainRecipient
-            );
-        } else {  
-            payload = abi.encodePacked(
-                swapParams.targetAmountOutMinimum,
-                swapParams.targetChainRecipient,
-                path[2],
-                path[3],
-                swapParams.deadline,
-                swapParams.poolFee,
-                typeExactIn,
-                typeNativeSwap
-            );  
-        }
-
-        // approve token bridge to spend feeTokens (UST)
+        // approve token bridge to spend feeTokens
         TransferHelper.safeApprove(
-            feeTokenAddress, 
-            tokenBridgeAddress, 
+            FEE_TOKEN_ADDRESS, 
+            TOKEN_BRIDGE_ADDRESS, 
             amountOut
         );
 
         // send transfer with payload to the TokenBridge
-        TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, 
+        TokenBridge(TOKEN_BRIDGE_ADDRESS).transferTokensWithPayload(
+            FEE_TOKEN_ADDRESS, 
             amountOut, 
             targetChainId, 
-            targetContractAddress, 
-            relayerFee, 
+            targetContractAddress,  
             nonce, 
             payload
         );
-    }
+    } 
 
-    /// @dev Executes exactOut native asset swap and pays the relayer
-    function recvAndSwapExactNativeOut(
-        bytes calldata encodedVaa
-    ) external returns (uint256 amountInUsed) {
-        // check token balance before redeeming the payload
-        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector,
-            address(this)
-        ));
-        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
-
-        // redeem and fetch parsed payload
-        SwapHelper.DecodedVaaParameters memory payload =
-            _getParsedPayload(
-                encodedVaa,
-                typeExactOut,
-                typeNativeSwap,
-                msg.sender // feeRecipient
-            );
-
-        // query token balance after redeeming the payload
-        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, 
-            address(this)
-        ));
-        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
-
-        // the balance change is the swap amount (less relayer fees)
-        uint256 maxAmountInLessFees = balanceAfter - balanceBefore;
-
-        // sanity check path
-        require(
-            payload.path[0]==feeTokenAddress, 
-            "tokenIn must be UST"
-        );
-        require(
-            payload.path[1]==wrappedNative, 
-            "tokenOut must be wrapped native asset"
-        );
-
-        // amountOut is the estimated swap amount for exact out methods
-        uint256 amountOut = payload.estimatedAmount;
-
-        // approve the router to spend tokens
-        TransferHelper.safeApprove(
-            payload.path[0], 
-            address(swapRouter), 
-            maxAmountInLessFees
-        ); 
-
-        // set swap options with user params
-        ISwapRouter.ExactOutputSingleParams memory params =
-            ISwapRouter.ExactOutputSingleParams({
-                tokenIn: payload.path[0],
-                tokenOut: payload.path[1],
-                fee: payload.poolFee,
-                recipient: address(this), 
-                deadline: payload.deadline,
-                amountOut: amountOut,
-                amountInMaximum: maxAmountInLessFees, 
-                sqrtPriceLimitX96: 0
-            });
-
-        // try to perform the swap
-        try swapRouter.exactOutputSingle(params) returns (uint256 amountInUsed) {
-            // refund recipient with any UST not used in the swap
-            if (amountInUsed < maxAmountInLessFees) {
-                TransferHelper.safeApprove(
-                    feeTokenAddress, 
-                    address(swapRouter), 
-                    0
-                );
-                IERC20(feeTokenAddress).safeTransfer(
-                    payload.recipientAddress, 
-                    maxAmountInLessFees - amountInUsed
-                );  
-            }
-
-            // unwrap native and send to recipient 
-            IWETH(wrappedNative).withdraw(amountOut);
-            payable(payload.recipientAddress).transfer(amountOut);
-
-            // used in UI to tell user they're getting
-            // their desired native asset
-            emit SwapResult(
-                payload.recipientAddress, 
-                payload.path[1], 
-                msg.sender, 
-                amountOut,
-                1
-            );
-            return amountInUsed;
-        } catch {
-            // swap failed - return UST to recipient
-            IERC20(feeTokenAddress).safeTransfer(
-                payload.recipientAddress, 
-                maxAmountInLessFees
-            );
-
-            // used in UI to tell user they're getting
-            // UST instead of their desired native asset
-            emit SwapResult(
-                payload.recipientAddress, 
-                payload.path[0], 
-                msg.sender, 
-                maxAmountInLessFees,
-                0
-            );
-        }
-    }
-
-    /// @dev Executes exactOut token swap and pays the relayer
-    function recvAndSwapExactOut(
-        bytes calldata encodedVaa
-    ) external returns (uint256 amountInUsed) {
-        // check token balance before redeeming the payload
-        (,bytes memory queriedBalanceBefore) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector,
-            address(this)
-        ));
-        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
-
-        // redeem and fetch parsed payload
-        SwapHelper.DecodedVaaParameters memory payload =
-            _getParsedPayload(
-                encodedVaa,
-                typeExactOut,
-                typeTokenSwap,
-                msg.sender // feeRecipient
-            );
-
-        // query token balance after redeeming the payload
-        (,bytes memory queriedBalanceAfter) = feeTokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, 
-            address(this)
-        ));
-        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
-
-        // the balance change is the swap amount (less relayer fees)
-        uint256 maxAmountInLessFees = balanceAfter - balanceBefore;
-        
-        // check path to see if first element is the feeToken
-        require(payload.path[0]==feeTokenAddress, "tokenIn must be UST");
-
-        // amountOut is the estimated swap amount for exact out methods
-        uint256 amountOut = payload.estimatedAmount;
-
-        // approve the router to spend tokens
-        TransferHelper.safeApprove(
-            payload.path[0], 
-            address(swapRouter), 
-            maxAmountInLessFees
-        ); 
-
-        // set swap options with user params
-        ISwapRouter.ExactOutputSingleParams memory params =
-            ISwapRouter.ExactOutputSingleParams({
-                tokenIn: payload.path[0],
-                tokenOut: payload.path[1],
-                fee: payload.poolFee,
-                recipient: payload.recipientAddress,
-                deadline: payload.deadline,
-                amountOut: amountOut,
-                amountInMaximum: maxAmountInLessFees, 
-                sqrtPriceLimitX96: 0
-            });
-
-        // try to perform the swap
-        try swapRouter.exactOutputSingle(params) returns (uint256 amountInUsed) {
-            // refund recipient with any UST not used in the swap
-            if (amountInUsed < maxAmountInLessFees) {
-                TransferHelper.safeApprove(
-                    feeTokenAddress, 
-                    address(swapRouter), 
-                    0
-                );
-                IERC20(feeTokenAddress).safeTransfer(
-                    payload.recipientAddress, 
-                    maxAmountInLessFees - amountInUsed
-                );  
-            }
-
-            // used in UI to tell user they're getting
-            // their desired token
-            emit SwapResult(
-                payload.recipientAddress, 
-                payload.path[1], 
-                msg.sender, 
-                amountOut,
-                1
-            );
-            return amountInUsed;
-        } catch {
-            // swap failed - return UST to recipient
-            IERC20(feeTokenAddress).safeTransfer(
-                payload.recipientAddress, 
-                maxAmountInLessFees
-            );
-
-            // used in UI to tell user they're getting
-            // UST instead of their desired token
-            emit SwapResult(
-                payload.recipientAddress, 
-                payload.path[0], 
-                msg.sender, 
-                maxAmountInLessFees,
-                0
-            );
-        }
-    }
-
-    /// @dev Executes exactOut native asset and token swaps before
-    /// sending a custom payload to the TokenBridge
+    /// @dev Executes exactOut native asset swaps
     function _swapExactOutBeforeTransfer(
         uint256 amountOut, 
         uint256 amountInMaximum,
         address contractCaller,
         address[] calldata path,
         uint256 deadline,
-        uint24 poolFee,
-        uint8 swapType
-    ) internal {
-        // create instance of erc20 token for token swaps
-        IERC20 token = IERC20(path[0]);
-
-        if (swapType == typeTokenSwap) {
-            // transfer tokens to this contract
-            token.safeTransferFrom(
-                contractCaller, 
-                address(this), 
-                amountInMaximum
-            );
-
-            // approve the router to spend tokens
-            TransferHelper.safeApprove(
-                path[0], 
-                address(swapRouter), 
-                amountInMaximum
-            );
-        }
-
+        uint24 poolFee
+    ) internal {  
         // set swap options with user params
         ISwapRouter.ExactOutputSingleParams memory params =
             ISwapRouter.ExactOutputSingleParams({
@@ -723,93 +370,19 @@ contract CrossChainSwapV3 {
                 sqrtPriceLimitX96: 0
             });
 
-        if (swapType == typeTokenSwap) {
-            // executes the swap returning the amountInUsed
-            uint256 amountInUsed = swapRouter.exactOutputSingle(params);
+        // executes the swap returning the amountInUsed 
+        // ask for our money back -_- after the swap executes        
+        uint256 amountInUsed = SWAP_ROUTER.exactOutputSingle{value: amountInMaximum}(params);
+        SWAP_ROUTER.refundETH();
 
-            // return any amountIn not used in the swap to contractCaller
-            if (amountInUsed < amountInMaximum) {
-                TransferHelper.safeApprove(path[0], address(swapRouter), 0);
-                token.safeTransfer(
-                    contractCaller, 
-                    amountInMaximum - amountInUsed
-                );
-            }
-        } else { // native swap 
-            // executes the swap returning the amountInUsed 
-            // ask for our money back -_- after the swap executes        
-            uint256 amountInUsed = swapRouter.exactOutputSingle{value: amountInMaximum}(params);
-            swapRouter.refundETH();
-
-            // return unused native asset to contractCaller
-            if (amountInUsed < amountInMaximum) {
-                TransferHelper.safeApprove(path[0], address(swapRouter), 0);
-                payable(contractCaller).transfer(
-                    amountInMaximum - amountInUsed
-                );
-            }
+        // return unused native asset to contractCaller
+        if (amountInUsed < amountInMaximum) {
+            // set SWAP_ROUTER allowance to zero
+            TransferHelper.safeApprove(path[0], address(SWAP_ROUTER), 0);
+            payable(contractCaller).transfer(
+                amountInMaximum - amountInUsed
+            );
         }
-    }
-
-    /// @dev Calls _swapExactOutBeforeTransfer and encodes custom payload with 
-    /// instructions for executing token swaps on the destination chain
-    function swapExactOutAndTransfer(
-        SwapHelper.ExactOutParameters calldata swapParams,
-        address[] calldata path,
-        uint256 relayerFee,
-        uint16 targetChainId, 
-        bytes32 targetContractAddress,
-        uint32 nonce
-    ) external {  
-        require(
-            swapParams.amountOut > relayerFee, 
-            "insufficient amountOut to pay relayer"
-        );
-        require(
-            path[1]==feeTokenAddress, 
-            "tokenOut must be UST for first swap"
-        );
-
-        // peform the first swap
-        _swapExactOutBeforeTransfer(
-            swapParams.amountOut, 
-            swapParams.amountInMaximum, 
-            msg.sender,
-            path[0:2], 
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeTokenSwap
-        );
-
-        // encode payload for second swap
-        bytes memory payload = abi.encodePacked(
-            swapParams.targetAmountOut,
-            swapParams.targetChainRecipient,
-            path[2],
-            path[3],
-            swapParams.deadline,
-            swapParams.poolFee,
-            typeExactOut,
-            typeTokenSwap
-        );
-
-        // approve token bridge to spend feeTokens (UST)
-        TransferHelper.safeApprove(
-            feeTokenAddress, 
-            tokenBridgeAddress, 
-            swapParams.amountOut
-        );
-
-        // send transfer with payload to the TokenBridge
-        TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, 
-            swapParams.amountOut, 
-            targetChainId, 
-            targetContractAddress, 
-            relayerFee, 
-            nonce, 
-            payload
-        );
     }
 
     /// @dev Calls _swapExactOutBeforeTransfer and encodes custom payload with 
@@ -827,12 +400,12 @@ contract CrossChainSwapV3 {
             "insufficient amountOut to pay relayer"
         );
         require(
-            path[0]==wrappedNative, 
+            path[0]==WRAPPED_NATIVE, 
             "tokenIn must be wrapped native asset for first swap"
         );
         require(
-            path[1]==feeTokenAddress, 
-            "tokenOut must be UST for first swap"
+            path[1]==FEE_TOKEN_ADDRESS, 
+            "tokenOut must be feeToken for first swap"
         );
         require(msg.value > 0, "must pass non 0 native asset amount");
 
@@ -843,45 +416,34 @@ contract CrossChainSwapV3 {
             msg.sender,
             path[0:2], 
             swapParams.deadline,
-            swapParams.poolFee,
-            typeNativeSwap
+            swapParams.poolFee
         );
 
-        // create payload variable
-        bytes memory payload;
+        // create payload with target swap instructions
+        bytes memory payload = abi.encodePacked(
+            swapParams.targetAmountOut,
+            swapParams.targetChainRecipient,
+            path[2],
+            path[3],
+            swapParams.deadline,
+            swapParams.poolFee,
+            TypeExactOut,
+            relayerFee
+        );  
 
-        // UST is native to Terra - no need for swap instructions
-        if (targetChainId == terraChainId) { 
-            payload = abi.encodePacked(
-                swapParams.targetChainRecipient
-            );
-        } else {  
-            payload = abi.encodePacked(
-                swapParams.targetAmountOut,
-                swapParams.targetChainRecipient,
-                path[2],
-                path[3],
-                swapParams.deadline,
-                swapParams.poolFee,
-                typeExactOut,
-                typeNativeSwap
-            );  
-        }
-
-        // approve token bridge to spend feeTokens (UST)
+        // approve token bridge to spend feeTokens 
         TransferHelper.safeApprove(
-            feeTokenAddress, 
-            tokenBridgeAddress, 
+            FEE_TOKEN_ADDRESS, 
+            TOKEN_BRIDGE_ADDRESS, 
             swapParams.amountOut
         );
 
         // send transfer with payload to the TokenBridge
-        TokenBridge(tokenBridgeAddress).transferTokensWithPayload(
-            feeTokenAddress, 
+        TokenBridge(TOKEN_BRIDGE_ADDRESS).transferTokensWithPayload(
+            FEE_TOKEN_ADDRESS, 
             swapParams.amountOut, 
             targetChainId, 
             targetContractAddress, 
-            relayerFee, 
             nonce, 
             payload
         );

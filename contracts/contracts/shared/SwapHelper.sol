@@ -6,12 +6,11 @@ pragma abicoder v2;
 import './IWormhole.sol';
 import 'solidity-bytes-utils/contracts/BytesLib.sol';
 
-
 /// @title Helper library for cross-chain swaps
 /// @notice Contains functions necessary for parsing encoded VAAs
 /// and structs containing swap parameters
 library SwapHelper {
-    using BytesLib for bytes;
+    using BytesLib for bytes;   
 
     /// @dev Parameters needed for exactIn swap type
     struct ExactInParameters {
@@ -40,14 +39,14 @@ library SwapHelper {
         uint8 version;
         uint256 swapAmount;
         address contractAddress;
-        uint256 relayerFee;
+        bytes32 fromAddress;
         uint256 estimatedAmount;
         address recipientAddress;
         address[2] path;
         uint256 deadline;
         uint24 poolFee;
         uint8 swapFunctionType;
-        uint8 swapCurrencyType;
+        uint256 relayerFee;
     }
 
     /// @dev Decodes parameters encoded in a VAA
@@ -71,7 +70,7 @@ library SwapHelper {
         // skip
         index += 2;
 
-        decoded.relayerFee = vmPayload.toUint256(index);
+        decoded.fromAddress = vmPayload.toBytes32(index);
         index += 32;
 
         decoded.estimatedAmount = vmPayload.toUint256(index);
@@ -98,6 +97,9 @@ library SwapHelper {
         decoded.swapFunctionType = vmPayload.toUint8(index);
         index += 1;
 
-        decoded.swapCurrencyType = vmPayload.toUint8(index);
+        decoded.relayerFee = vmPayload.toUint256(index);
+        index += 32;
+
+        require(vmPayload.length == index, "invalid payload length");
     }
 }

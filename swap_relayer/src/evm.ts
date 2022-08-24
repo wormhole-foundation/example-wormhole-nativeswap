@@ -1,7 +1,4 @@
-import {
-  getIsTransferCompletedEth,
-  hexToUint8Array,
-} from "@certusone/wormhole-sdk";
+import { getIsTransferCompletedEth, hexToUint8Array } from "@certusone/wormhole-sdk";
 
 import { ethers } from "ethers";
 
@@ -54,35 +51,24 @@ export function loadEvmConfig(): EvmEnvironment[] {
     }
 
     let key_contract_address: string = evm + "_CONTRACT_ADDRESS";
-    let val_contract_address: string = eval(
-      "process.env." + key_contract_address
-    );
+    let val_contract_address: string = eval("process.env." + key_contract_address);
     if (!val_contract_address) {
       logger.error("Missing environment variable " + key_contract_address);
       return undefined;
     }
 
     let key_token_bridge_address: string = evm + "_TOKEN_BRIDGE_ADDRESS";
-    let val_token_bridge_address: string = eval(
-      "process.env." + key_token_bridge_address
-    );
+    let val_token_bridge_address: string = eval("process.env." + key_token_bridge_address);
     if (!val_token_bridge_address) {
       logger.error("Missing environment variable " + key_token_bridge_address);
       return undefined;
     }
 
     let key_wallet_private_key: string = evm + "_WALLET_PRIVATE_KEY";
-    let val_wallet_private_key: string = eval(
-      "process.env." + key_wallet_private_key
-    );
-    if (!val_wallet_private_key)
-      val_wallet_private_key = process.env.WALLET_PRIVATE_KEY;
+    let val_wallet_private_key: string = eval("process.env." + key_wallet_private_key);
+    if (!val_wallet_private_key) val_wallet_private_key = process.env.WALLET_PRIVATE_KEY;
     if (!val_wallet_private_key) {
-      logger.error(
-        "Missing environment variable " +
-          key_wallet_private_key +
-          " or WALLET_PRIVATE_KEY"
-      );
+      logger.error("Missing environment variable " + key_wallet_private_key + " or WALLET_PRIVATE_KEY");
       return undefined;
     }
 
@@ -170,72 +156,15 @@ function makeContractDataForEvm(env: EvmEnvironment): EvmContractData {
   };
 }
 
-export function isEvmContract(
-  contractAddress: string,
-  chain_id: number
-): boolean {
+export function isEvmContract(contractAddress: string, chain_id: number): boolean {
   let ecd = evmContractData.get(chain_id);
   return ecd && ecd.contractAddress === contractAddress;
 }
 
-/*
-  // GOERLI_PROVIDER = Ethereum
-  // MUMBAI_PROVIDER = Polygon
-
-  if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM) {
-    // Use one of the V3 swap methods.
-  } else if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON) {
-    // Use one of the V2 swap methods.
-  } else {
-    // Error
-  }
-
-  if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 1) {
-    // swapExactInFromVaaNative
-  } else if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 2) {
-    // swapExactInFromVaaToken    
-  } else if (
-    t3Payload.swapFunctionType === 2 &&  t3Payload.swapCurrencyType === 1) {
-    // swapExactOutFromVaaNative
-  } else if (t3Payload.swapFunctionType === 2 && t3Payload.swapCurrencyType === 2) {
-    // swapExactOutFromVaaToken
-  } else {
-    // error
-  }
-*/
-
-/*
-  // GOERLI_PROVIDER = Ethereum
-  // MUMBAI_PROVIDER = Polygon
-
-  if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_ETHEREUM) {
-    // Use one of the V3 swap methods.
-  } else if (t3Payload.contractAddress === CROSSCHAINSWAP_CONTRACT_ADDRESS_POLYGON) {
-    // Use one of the V2 swap methods.
-  } else {
-    // Error
-  }
-
-  if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 1) {
-    // swapExactInFromVaaNative
-  } else if (t3Payload.swapFunctionType === 1 && t3Payload.swapCurrencyType === 2) {
-    // swapExactInFromVaaToken    
-  } else if (
-    t3Payload.swapFunctionType === 2 &&  t3Payload.swapCurrencyType === 1) {
-    // swapExactOutFromVaaNative
-  } else if (t3Payload.swapFunctionType === 2 && t3Payload.swapCurrencyType === 2) {
-    // swapExactOutFromVaaToken
-  } else {
-    // error
-  }
-*/
-
 export async function relayVaaToEvm(vaaBytes: string, t3Payload: Type3Payload) {
   let ecd = evmContractData.get(t3Payload.targetChainId);
   if (!ecd) {
-    logger.error(
-      "relayVaaToEvm: chain id " + t3Payload.targetChainId + " does not exist!"
-    );
+    logger.error("relayVaaToEvm: chain id " + t3Payload.targetChainId + " does not exist!");
   }
 
   let exactIn: boolean = false;
@@ -244,51 +173,23 @@ export async function relayVaaToEvm(vaaBytes: string, t3Payload: Type3Payload) {
     exactIn = true;
   } else if (t3Payload.swapFunctionType !== 2) {
     error = true;
-    logger.error(
-      "relayVaaTo" +
-        ecd.name +
-        ": unsupported swapFunctionType: [" +
-        t3Payload.swapFunctionType +
-        "]"
-    );
+    logger.error("relayVaaTo" + ecd.name + ": unsupported swapFunctionType: [" + t3Payload.swapFunctionType + "]");
   }
-
-  let native: boolean = false;
-  if (t3Payload.swapCurrencyType === 1) {
-    native = true;
-  } else if (t3Payload.swapCurrencyType !== 2) {
-    error = true;
-    logger.error(
-      "relayVaaTo" +
-        ecd.name +
-        ": unsupported swapCurrencyType: [" +
-        t3Payload.swapCurrencyType +
-        "]"
-    );
-  }
-
   if (error) return;
 
   logger.debug(
-    "relayVaaTo" +
-      ecd.name +
-      ": chain_id: " +
-      ecd.chain_id +
-      ", contractAddress: [" +
-      t3Payload.contractAddress +
-      "]"
+    "relayVaaTo" + ecd.name + ": chain_id: " + ecd.chain_id + ", contractAddress: [" + t3Payload.contractAddress + "]"
   );
 
   const signedVaaArray = hexToUint8Array(vaaBytes);
-  await relayVaaToEvmChain(t3Payload, ecd, signedVaaArray, exactIn, native);
+  await relayVaaToEvmChain(t3Payload, ecd, signedVaaArray, exactIn);
 }
 
 async function relayVaaToEvmChain(
   t3Payload: Type3Payload,
   tcd: EvmContractData,
   signedVaaArray: Uint8Array,
-  exactIn: boolean,
-  native: boolean
+  exactIn: boolean
 ) {
   logger.debug(
     "relayVaaTo" +
@@ -312,8 +213,6 @@ async function relayVaaToEvmChain(
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
-        ", native: " +
-        native +
         ": completed: already transferred"
     );
 
@@ -331,41 +230,17 @@ async function relayVaaToEvmChain(
       t3Payload.contractAddress +
       "], exactIn: " +
       exactIn +
-      ", native: " +
-      native +
       ": submitting redeem request"
   );
 
   try {
     let receipt: any = null;
     if (exactIn) {
-      if (native) {
-        logger.debug("relayVaaTo: calling evmSwapExactInFromVaaNative()");
-        receipt = await swap.evmSwapExactInFromVaaNative(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      } else {
-        logger.debug("relayVaaTo: calling evmSwapExactInFromVaaToken()");
-        receipt = await swap.evmSwapExactInFromVaaToken(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      }
+      logger.debug("relayVaaTo: calling evmSwapExactInFromVaaNative()");
+      receipt = await swap.evmSwapExactInFromVaaNative(tcd.contractWithSigner, signedVaaArray);
     } else {
-      if (native) {
-        logger.debug("relayVaaTo: calling evmSwapExactOutFromVaaNative()");
-        receipt = await swap.evmSwapExactOutFromVaaNative(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      } else {
-        logger.debug("relayVaaTo: calling evmSwapExactOutFromVaaToken()");
-        receipt = await swap.evmSwapExactOutFromVaaToken(
-          tcd.contractWithSigner,
-          signedVaaArray
-        );
-      }
+      logger.debug("relayVaaTo: calling evmSwapExactOutFromVaaNative()");
+      receipt = await swap.evmSwapExactOutFromVaaNative(tcd.contractWithSigner, signedVaaArray);
     }
 
     logger.info(
@@ -379,8 +254,6 @@ async function relayVaaToEvmChain(
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
-        ", native: " +
-        native +
         ": completed: success, txHash: " +
         receipt.transactionHash
     );
@@ -397,8 +270,6 @@ async function relayVaaToEvmChain(
           t3Payload.contractAddress +
           "], exactIn: " +
           exactIn +
-          ", native: " +
-          native +
           ": completed: relay failed because the vaa has already been redeemed"
       );
 
@@ -412,8 +283,6 @@ async function relayVaaToEvmChain(
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
-        ", native: " +
-        native +
         ": transaction failed: %o",
       e
     );
@@ -431,8 +300,6 @@ async function relayVaaToEvmChain(
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
-        ", native: " +
-        native +
         ": redeem confirmed"
     );
   } else {
@@ -447,29 +314,18 @@ async function relayVaaToEvmChain(
         t3Payload.contractAddress +
         "], exactIn: " +
         exactIn +
-        ", native: " +
-        native +
         ": completed: failed to confirm redeem!"
     );
   }
 }
 
-async function isRedeemedOnEvm(
-  tcd: EvmContractData,
-  signedVaaArray: Uint8Array
-): Promise<boolean> {
+async function isRedeemedOnEvm(tcd: EvmContractData, signedVaaArray: Uint8Array): Promise<boolean> {
   let redeemed: boolean = false;
   try {
-    redeemed = await getIsTransferCompletedEth(
-      tcd.tokenBridgeAddress,
-      tcd.provider,
-      signedVaaArray
-    );
+    redeemed = await getIsTransferCompletedEth(tcd.tokenBridgeAddress, tcd.provider, signedVaaArray);
   } catch (e) {
     logger.error(
-      "relayVaaTo" +
-        tcd.name +
-        ": failed to check if transfer is already complete, will attempt the transfer, e: %o",
+      "relayVaaTo" + tcd.name + ": failed to check if transfer is already complete, will attempt the transfer, e: %o",
       e
     );
   }
