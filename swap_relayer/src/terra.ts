@@ -167,26 +167,6 @@ export async function relayVaaToTerra(
 ) {
   if (!terraContractData) return;
 
-  // logger.debug(
-  //   "relayVaaToTerra: checking if already redeemed using tokenBridgeAddress [" +
-  //     terraContractData.tokenBridgeAddress +
-  //     "]"
-  // );
-
-  // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
-  //   logger.info(
-  //     "relayVaaToTerra: srcChain: " +
-  //       t3Payload.sourceChainId +
-  //       ", targetChain: " +
-  //       t3Payload.targetChainId +
-  //       ", contract: [" +
-  //       t3Payload.contractAddress +
-  //       "]: completed: already redeemed"
-  //   );
-
-  //   return;
-  // }
-
   try {
     logger.debug(
       "relayVaaToTerra: creating message using contract address [" +
@@ -241,6 +221,34 @@ export async function relayVaaToTerra(
 
     const receipt = await terraContractData.lcdClient.tx.broadcast(tx);
 
+    if (!receipt.txhash) {
+      logger.info(
+        "relayVaaToTerra: srcChain: " +
+          t3Payload.sourceChainId +
+          ", targetChain: " +
+          t3Payload.targetChainId +
+          ", contract: [" +
+          t3Payload.contractAddress +
+          "]: completed: failed, no txhash: %o",
+        receipt
+      );
+    }
+
+    if (receipt.raw_log && receipt.raw_log.search("VaaAlreadyExecuted") >= 0) {
+      logger.info(
+        "relayVaaToTerra: srcChain: " +
+          t3Payload.sourceChainId +
+          ", targetChain: " +
+          t3Payload.targetChainId +
+          ", contract: [" +
+          t3Payload.contractAddress +
+          "]: completed: success: already executed, txhash: " +
+          receipt.txhash
+      );
+
+      return;
+    }
+
     logger.info(
       "relayVaaToTerra: srcChain: " +
         t3Payload.sourceChainId +
@@ -248,31 +256,10 @@ export async function relayVaaToTerra(
         t3Payload.targetChainId +
         ", contract: [" +
         t3Payload.contractAddress +
-        "]: completed: success: %o",
-      receipt
+        "]: completed: success: txhash: " +
+        receipt.txhash
     );
-
-    // logger.info(
-    //   "relayVaaToTerra: contract: [" +
-    //     t3Payload.contractAddress +
-    //     "]: success, txHash: " +
-    //     receipt.transactionHash
-    // );
   } catch (e: any) {
-    // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
-    //   logger.info(
-    //     "relayVaaToTerra: srcChain: " +
-    //       t3Payload.sourceChainId +
-    //       ", targetChain: " +
-    //       t3Payload.targetChainId +
-    //       ", contract: [" +
-    //       t3Payload.contractAddress +
-    //       "]: completed: relay failed because the vaa has already been redeemed"
-    //   );
-
-    //   return;
-    // }
-
     logger.error(
       "relayVaaToTerra: srcChain: " +
         t3Payload.sourceChainId +
@@ -284,74 +271,4 @@ export async function relayVaaToTerra(
       e
     );
   }
-
-  // if (await isRedeemedOnTerra(terraContractData, vaaBytes)) {
-  //   logger.info(
-  //     "relayVaaToTerra: srcChain: " +
-  //       t3Payload.sourceChainId +
-  //       ", targetChain: " +
-  //       t3Payload.targetChainId +
-  //       ", contract: [" +
-  //       t3Payload.contractAddress +
-  //       "]: redeem confirmed"
-  //   );
-  // } else {
-  //   logger.error(
-  //     "relayVaaToTerra: srcChain: " +
-  //       t3Payload.sourceChainId +
-  //       ", targetChain: " +
-  //       t3Payload.targetChainId +
-  //       ", contract: [" +
-  //       t3Payload.contractAddress +
-  //       "]: completed: failed to confirm redeem!"
-  //   );
-  // }
-}
-
-async function isRedeemedOnTerra(
-  terraContractData: TerraContractData,
-  vaaBytes: string
-): Promise<boolean> {
-  let msg: Terra.MsgExecuteContract = null;
-  let sequenceNumber: number = 0;
-  try {
-    msg = new Terra.MsgExecuteContract(
-      terraContractData.wallet.key.accAddress,
-      terraContractData.tokenBridgeAddress,
-      {
-        submit_vaa: {
-          data: Buffer.from(vaaBytes, "hex").toString("base64"),
-        },
-      }
-    );
-
-    sequenceNumber = await terraContractData.wallet.sequence();
-  } catch (e) {
-    logger.error(
-      "isRedeemedOnTerra: failed to create message or look up sequence number, e: %o",
-      e
-    );
-
-    return false;
-  }
-
-  try {
-    await terraContractData.lcdClient.tx.estimateFee(
-      [{ sequenceNumber: sequenceNumber }],
-      {
-        msgs: [msg],
-      }
-    );
-  } catch (e) {
-    if (e.response.data.error.includes("VaaAlreadyExecuted")) {
-      return true;
-    }
-
-    logger.error(
-      "isRedeemedOnTerra: failed to check if transfer is already complete, e: %o",
-      e
-    );
-  }
-
-  return false;
 }
